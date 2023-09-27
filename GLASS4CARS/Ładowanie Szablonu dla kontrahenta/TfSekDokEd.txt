@@ -1,0 +1,567 @@
+//TfSekDokEd
+{$ADDTYPE TOnEditBtnClickEvent}
+{$ADDTYPE TstEditBtnType}
+{$ADDTYPE TstEditBtnsType}
+{$ADDTYPE TstEditButton}
+{$ADDTYPE TstEditBtns}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TQSEKDOK}
+{$ADDTYPE TDMSekDok}
+{$ADDTYPE TQNAGL}
+{$ADDTYPE TZakresMinMax}
+{$ADDTYPE TFCzytajCos}
+{$ADDTYPE TMenuItem}
+{$ADDTYPE TstPopupMenu}
+{$ADDTYPE TSekDokSQLMaker}
+{$ADDTYPE TFIBDatabase}
+{$ADDTYPE TFIBTransaction}
+{$ADDTYPE TstTransaction}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TstPanel}
+{$ADDTYPE TstLabel}
+{$ADDTYPE TQEdit}
+{$ADDTYPE TstComboBox}
+{$ADDTYPE TstCheckBox}
+{$ADDTYPE TstBitBtn}
+{$ADDTYPE TstSeparator}
+{$ADDTYPE TstEditBtnsType}
+{$ADDTYPE TstEditButton}
+{$ADDTYPE TstEditBtns}
+{$ADDTYPE TSlownikBtn}
+{$ADDTYPE TDBValueComboBox}
+{$ADDTYPE TDBDateEdit}
+{$ADDTYPE TstDBMaskEdit}
+{$ADDTYPE TstXComboBox}
+{$ADDTYPE TstDBPopupMenu}
+{$ADDTYPE TKrDBGrid}
+{$ADDTYPE TQSEKDOK}
+{$ADDTYPE TDMSekDok}
+{$ADDTYPE TfSekDokEd}
+{$ADDTYPE TDM_SekDokPoz}
+{$ADDTYPE TfSekDokPozEd}
+
+
+ type
+  TControlType = (ctPanel, ctLabel, ctQEdit, ctComboBox, ctBitBtn, ctSeparator);
+
+var
+  fSekDokEd: TfSekDokEd;
+  IdEtapAkceptSzablon: Integer;
+  BlokadaDokumentacja: Boolean;
+  BlokadaPozycje: Boolean;
+  lblNumerDokumentu:TstLabel;
+  warttoscCechy: TQedit;
+  BBAktualizacjaNazwyKartotekiM:TstBitBtn;
+  stEditBtnsPolaWymaganeBlokowane: TstEditBtns;
+
+function PobIdEtapAkceptSzablon: Integer;
+var
+  vIdSciezkaAkcept: Integer;
+  vEtapAkceptNazwa: string;
+  vIdEtapAkcept: Integer;
+  vSql: string;
+begin
+  Result := -1;
+
+  if not ((fSekDokEd.klEdycji = F3) or (fSekDokEd.klEdycji = F5)) then Exit;
+
+  vSql := 'select srd.id_sciezkaakcept'
+       + ' from sekdok sd'
+       + ' join sekrodzajdok srd on sd.id_sekrodzajdok = srd.id_sekrodzajdok'
+       + ' where sd.id_sekdok = ' + TstQuery(fSekDokEd.DS_SekDok.DataSet).FieldByName('ID_SEKDOK').AsString;
+
+  vIdSciezkaAkcept := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+  if (vIdSciezkaAkcept < 0) then Exit;
+
+  vSql := 'select ea.nazwa'
+       + ' from sekdok sd'
+       + ' join etapakcept ea on sd.id_sciezkaakcept = ea.id_sciezkaakcept and ea.inicjator = 0 and ea.aktualny = 1'
+       + ' where sd.id_sekdok = ' + TstQuery(fSekDokEd.DS_SekDok.DataSet).FieldByName('ID_SEKDOK').AsString;
+
+  vEtapAkceptNazwa := GetFromQuerySQL(vSql, 0);
+
+  vSql := 'select first 1 ea.id_etapakcept'
+       + ' from etapakcept ea'
+       + ' where ea.id_sciezkaakcept = ' + IntToStr(vIdSciezkaAkcept)
+       + ' and ea.nazwa = ' + QuotedStr(vEtapAkceptNazwa)
+       + ' order by ea.lp';
+
+  vIdEtapAkcept := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+  if (vIdEtapAkcept < 0) then Exit;
+
+  Result := vIdEtapAkcept;
+end;
+
+function CreateControl(const AControlType: TControlType; const AOwner: TComponent; const AName: string;
+         const ALeft, ATop, AWidth, AHeight: Integer): TControl;
+begin
+  Result := nil;
+
+  case AControlType of
+    ctPanel: Result := TstPanel.Create(AOwner);
+    ctLabel: Result := TstLabel.Create(AOwner);
+    ctQEdit: Result := TQEdit.Create(AOwner);
+    ctComboBox: Result := TstComboBox.Create(AOwner);
+    ctBitBtn: Result := TstBitBtn.Create(AOwner);
+    ctSeparator: Result := TstSeparator.Create(AOwner);
+  end;
+
+  if (Result <> nil) then
+  begin
+    Result.Name := AName;
+    Result.Left := ALeft;
+    Result.Top := ATop;
+    Result.Width := AWidth;
+    Result.Height := AHeight;
+  end;
+end;
+
+
+
+
+procedure bbDodajPozycje(Sender: TObject);
+var
+ vSql:String;
+ idKontrahent:integer;
+begin
+ //inf300(fSekDoked.E_Kontrahent.Text);
+ inf300(intToStr(fSekDoked.DmEdycja.fQSekDok.ID_SEKDOK.VALUE));
+ if(fSekDokEd.DmEdycja.fQSekDok.ID_KONTRAH.value =0) then
+ begin
+ inf300('Nie wybrano kontrahenta');
+ exit;
+ end;
+ SetGlobalData('SlownikPobierz','TAK');
+ SetGlobalData('ID_Kontrahent',fSekDokEd.DmEdycja.fQSekDok.ID_KONTRAH.VALUE);
+
+ vSql:='SELECT COUNT(*) FROM XXX_DMS_SZABLON WHERE ID_KONTRAHENT =' +intToStr(fSekDokEd.DmEdycja.fQSekDok.ID_KONTRAH.VALUE);
+
+ idKontrahent := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+ if(idKontrahent<=0) then
+ begin
+      Inf('Nieokreślono szablonu dla podanego Kontrahneta.', 100);
+      Exit;
+ end;
+
+ fSekDoked.EB_PozycjeEditButtonClick(nil, ebtDodaj, F3);
+
+
+end;
+
+ procedure UstawEditBtnsPolaWymaganeBlokowaneImage;
+var
+  i: integer;
+  vButton: TstEditButton;
+begin
+  for i := 0 to fSekDokEd.EB_Pozycje.ControlCount - 1 do
+  begin
+    if (fSekDokEd.EB_Pozycje.Controls[i] is TstEditButton) then
+    begin
+      vButton := TstEditButton(fSekDokEd.EB_Pozycje.Controls[i]);
+
+         // +','+intToStr(TstEditButton(fSekDokEd.EB_Pozycje.Controls[i].Width) +','
+         // +intToStr(TstEditButton(fSekDokEd.EB_Pozycje.Controls[i].Left))));
+      // inf300( inttostr(i)+ ': '+TstEditBtnType(vButton.BtnType).Asstring);
+      if (vButton.BtnType = ebtCustom1) then
+      begin
+        TstEditButton(fSekDokEd.EB_Pozycje.Controls[i]).RepoName := 'cross_24';
+        TstEditButton(fSekDokEd.EB_Pozycje.Controls[i]).Width:=36;
+        TstEditButton(fSekDokEd.EB_Pozycje.Controls[i]).Height:=38;
+        end
+    end;
+  end;
+end;
+
+  procedure stEditBtnsPolaWymaganeBlokowane_OnEditButtonClick(Sender: TObject; ABtnType: TstEditBtnType; AKlawisz: Tklawisz);
+begin
+if (ABtnType <> ebtCustom1) then
+  begin
+    fSekDoked.EB_PozycjeEditButtonClick(sender, ABtnType, AKlawisz);
+  end;
+
+
+
+  if (ABtnType = ebtCustom1) then
+  begin
+    bbDodajPozycje(self);
+  end;
+end;
+
+
+
+procedure DodajPozycje;
+begin
+  fSekDokEd.EB_Pozycje.AllowCustomWidth:=true;
+
+  fSekDokEd.EB_Pozycje.Width := fSekDokEd.EB_Pozycje.Width+100;
+  fSekDokEd.EB_Pozycje.Buttons := [ebtPokaz, ebtDodaj, ebtPopraw, ebtUsun,ebtCustom1];
+  fSekDokEd.EB_Pozycje.OnEditButtonClick := @stEditBtnsPolaWymaganeBlokowane_OnEditButtonClick;
+
+end;
+
+procedure UstawBlokadePanelu(const APanel: TstPanel);
+var
+  vControl: TControl;
+  i: Integer;
+begin
+  if (APanel <> nil) then
+  begin
+    if not APanel.Visible then Exit;
+    for i := 0 to APanel.ControlCount - 1 do
+    begin
+      vControl := APanel.Controls[i];
+
+      if (vControl is TQEdit) then
+        TQEdit(vControl).ReadOnly := True;
+
+      if (vControl is TstEdit) then
+        TstEdit(vControl).ReadOnly := True;
+
+      if (vControl is TstXComboBox) then
+        TstXComboBox(vControl).Enabled := False;
+
+      if (vControl is TSlownikBtn) then
+        TSlownikBtn(vControl).ReadOnly := True;
+
+      if (vControl is TstDBEdit) then
+        TstDBEdit(vControl).ReadOnly := True;
+
+      if (vControl is TDBDateEdit) then
+        TDBDateEdit(vControl).ReadOnly := True;
+
+      if (vControl is TDBValueComboBox) then
+        TDBValueComboBox(vControl).ReadOnly := True;
+
+      if (vControl is TstDBMaskEdit) then
+        TstDBMaskEdit(vControl).ReadOnly := True;
+
+      if (vControl is TstDBCheckBox) then
+        TstDBCheckBox(vControl).Enabled := False;
+
+      if (vControl is TstDBMemo) then
+        TstDBMemo(vControl).ReadOnly := True;
+    end;
+  end;
+end;
+
+procedure UstawBlokadeParametrow(const AIdEtapAkcept: Integer);
+var
+  vSql: string;
+  vDS: TDataSource;
+begin
+  BlokadaDokumentacja := False;
+  BlokadaPozycje := False;
+
+  if not ((fSekDokEd.klEdycji = F3) or (fSekDokEd.klEdycji = F5)) then Exit;
+
+  if (AIdEtapAkcept < 0) then Exit;
+
+  vSql := 'select id_etapakcept_pole, id_etapakcept, id_pole_slownik, wymagany, blokowany, id_analityka'
+       + ' from xxx_dms_etapakcept_pole'
+       + ' where id_etapakcept = ' + IntToStr(AIdEtapAkcept)
+       + ' and blokowany = 1'
+       + ' order by id_etapakcept_pole';
+
+  vDS := OpenQuerySQL(vSql, 0);
+  try
+    vDS.DataSet.First;
+    while not vDS.DataSet.Eof do
+    begin
+      case vDS.DataSet.FieldByName('id_pole_slownik').AsInteger of
+        1: if fSekDokEd.DBM_OpisDok.Visible then
+             fSekDokEd.DBM_OpisDok.ReadOnly := True;
+        2: BlokadaDokumentacja := True;
+        3: UstawBlokadePanelu(fSekDokEd.PA_DataDok);
+        4: UstawBlokadePanelu(fSekDokEd.PA_DataWplywu);
+        5: UstawBlokadePanelu(fSekDokEd.PA_DataKsiegowania);
+        6: UstawBlokadePanelu(fSekDokEd.PA_Kontrah);
+        7: UstawBlokadePanelu(fSekDokEd.PA_MiejsceZak);
+        8: UstawBlokadePanelu(fSekDokEd.PA_TerminPlatnosci);
+        9: UstawBlokadePanelu(fSekDokEd.PA_KwotaNetto);
+        10: UstawBlokadePanelu(fSekDokEd.PA_KwotaBrutto);
+        11: UstawBlokadePanelu(fSekDokEd.PA_WalutaDokumentu);
+        12: UstawBlokadePanelu(fSekDokEd.PA_NrDokZew);
+        13: UstawBlokadePanelu(fSekDokEd.PA_Akwizytor);
+        14: UstawBlokadePanelu(fSekDokEd.PA_Zlecenie);
+        15: UstawBlokadePanelu(fSekDokEd.PA_JednOrg);
+        16: UstawBlokadePanelu(fSekDokEd.PA_Pracownik);
+        {10001: begin
+                 if fSekDokEd.PA_Przelew.Visible then
+                 begin
+                   fSekDokEd.CB_RachunekKontrah.Enabled := False;
+                   fSekDokEd.DBE_KontoBankowe.ReadOnly := True;
+                   fSekDokEd.DBE_KwotaPrzelew.ReadOnly := True;
+                 end;
+               end;
+        10002: if fSekDokEd.PA_Przelew.Visible then
+                 fSekDokEd.DBCB_ZakceptowanoDoPrzel.Enabled := False;
+                 }
+        10003: BlokadaPozycje := True;
+      end;
+      vDS.DataSet.Next;
+    end;
+  finally
+    CloseQuerySQL(vDS);
+  end;
+end;
+
+procedure DS_SekDodDokumZewDataChange(Sender: TObject; Field: TField);
+begin
+  fSekDokEd.DS_SekDodDokumZewDataChange(Sender, Field);
+
+  if BlokadaDokumentacja then
+    fSekDokEd.EB_SekDokDokumZew.DisabledButtons := [ebtDodaj, ebtPopraw, ebtUsun];
+end;
+
+procedure PC_Main_OnChange(Sender: TObject);
+begin
+  fSekDokEd.PC_MainChange(Sender);
+
+  if BlokadaDokumentacja then
+    if (fSekDokEd.PC_Main.ActivePage = fSekDokEd.TS_Dokumentacja) then
+    begin
+      fSekDokEd.DBPM_SekDokDokumZew.DataSource := nil;
+      fSekDokEd.DBPM_SekDokDokumZew.Items.Clear;
+      fSekDokEd.DBG_SekDodDokumZew.OnDblClick := nil;
+      fSekDokEd.EB_SekDokDokumZew.DisabledButtons := [ebtDodaj, ebtPopraw, ebtUsun];
+    end;
+
+  if BlokadaPozycje then
+    if (fSekDokEd.PC_Main.ActivePage = fSekDokEd.TS_Poz) then
+    begin
+      fSekDokEd.DBPM_PozSekDok.DataSource := nil;
+      fSekDokEd.DBPM_PozSekDok.Items.Clear;
+      fSekDokEd.DBG_Pozycje.OnDblClick := nil;
+      fSekDokEd.EB_Pozycje.DisabledButtons := [ebtDodaj, ebtPopraw, ebtUsun];
+    end;
+end;
+
+procedure DodajDoLoga(var ALog: string; const AText: string);
+begin
+  if (ALog <> '') then
+    ALog := ALog + #13 + #10;
+  ALog := ALog + AText;
+end;
+
+function SprPozycjeSlownik: string;
+var
+  vSql: string;
+  vDS: TDataSource;
+  vTemp: string;
+begin
+  Result := '';
+
+  vSql := 'select id_poz, lp, indeks, nazwaskr, nazwadl, opis, id_analityka, analityka'
+       + ' from xxx_dms_spr_poz_slownik(' + TstQuery(fSekDokEd.DS_SekDok.DataSet).FieldByName('ID_SEKDOK').AsString + ')'
+       + ' order by lp';
+
+  vDS := OpenQuerySQL(vSql, 0);
+  try
+    vDS.DataSet.First;
+    while not vDS.DataSet.Eof do
+    begin
+      vTemp := 'Pozycja: Lp: ' + vDS.DataSet.FieldByName('lp').AsString + ', '
+        + ' Identyfikator: ' + + vDS.DataSet.FieldByName('nazwaskr').AsString + ', '
+        + vDS.DataSet.FieldByName('opis').AsString + ': ' + vDS.DataSet.FieldByName('analityka').AsString;
+      DodajDoLoga(Result, vTemp);
+      vDS.DataSet.Next;
+    end;
+  finally
+    CloseQuerySQL(vDS);
+  end;
+end;
+
+function SprawdzParametry(const AIdEtapAkcept: Integer): Boolean;
+var
+  vLog: string;
+  vSql: string;
+  vDS: TDataSource;
+  vLogSlownikiPozycji: string;
+begin
+  Result := True;
+
+  if not ((fSekDokEd.klEdycji = F3) or (fSekDokEd.klEdycji = F5)) then Exit;
+
+  if (AIdEtapAkcept < 0) then Exit;
+
+  vLog := '';
+
+  vSql := 'select xep.id_etapakcept_pole, xep.id_etapakcept, xep.id_pole_slownik, xep.wymagany, xep.blokowany, xep.id_analityka, xps.nazwa'
+       + ' from xxx_dms_etapakcept_pole xep'
+       + ' join xxx_dms_pole_slownik xps on xep.id_pole_slownik = xps.id_pole_slownik'
+       + ' where xep.id_etapakcept = ' + IntToStr(AIdEtapAkcept)
+       + ' and xep.wymagany = 1'
+       + ' order by xep.id_etapakcept_pole';
+
+  vDS := OpenQuerySQL(vSql, 0);
+  try
+    vDS.DataSet.First;
+    while not vDS.DataSet.Eof do
+    begin
+      case vDS.DataSet.FieldByName('id_pole_slownik').AsInteger of
+        1: if fSekDokEd.DBM_OpisDok.Visible then
+             if (fSekDokEd.DmEdycja.QSekDok.OPIS.AsString = '') then
+               DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        2: if (TstTransaction(TstQuery(fSekDokEd.DS_SekDodDokumZew.DataSet).Transaction).PodajzQuery(
+             'count(wdz.id_doddokumzew)',
+             'wystsekdokdokumzew wdz',
+             'wdz.id_sekdok = ' + fSekDokEd.DmEdycja.QSekDok.ID_SEKDOK.AsString,
+             '', '', '', '', '', '').AsInteger = 0) then
+               DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        3: if fSekDokEd.PA_DataDok.Visible then
+             if fSekDokEd.DmEdycja.QSekDok.DATA_DOK.IsNull then
+               DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        4: if fSekDokEd.PA_DataWplywu.Visible then
+             if fSekDokEd.DmEdycja.QSekDok.DATA_WPLYWU.IsNull then
+               DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        5: if fSekDokEd.PA_DataKsiegowania.Visible then
+             if fSekDokEd.DmEdycja.QSekDok.DATA_KSIEGOWANIA.IsNull then
+               DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        6: if fSekDokEd.PA_Kontrah.Visible then
+             if fSekDokEd.DmEdycja.QSekDok.ID_KONTRAH.IsNull then
+               DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        7: if fSekDokEd.PA_MiejsceZak.Visible then
+             if fSekDokEd.DmEdycja.QSekDok.ID_MIEJSCEZAKUPU.IsNull then
+               DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        8: if fSekDokEd.PA_TerminPlatnosci.Visible then
+           begin
+             if (fSekDokEd.DBVCB_TerminPlatnosciOd.ItemIndex = 0) then
+               if (fSekDokEd.DmEdycja.QSekDok.DATA_DOK.IsNull
+                 or fSekDokEd.DmEdycja.QSekDok.TERMIN_PLATNOSCI.IsNull
+                 or (Trim(fSekDokEd.QE_DniNaTermin.Text) = '')) then
+                   DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+             if (fSekDokEd.DBVCB_TerminPlatnosciOd.ItemIndex = 1) then
+               if (fSekDokEd.DmEdycja.QSekDok.DATA_WPLYWU.IsNull
+                 or fSekDokEd.DmEdycja.QSekDok.TERMIN_PLATNOSCI.IsNull
+                 or (Trim(fSekDokEd.QE_DniNaTermin.Text) = '')) then
+                   DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+           end;
+
+        9: if fSekDokEd.PA_KwotaNetto.Visible then
+             if (fSekDokEd.DmEdycja.QSekDok.KWOTA_NETTO.IsNull
+               or (fSekDokEd.DmEdycja.QSekDok.KWOTA_NETTO.AsCurrency < 0))then
+                 DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        10: if fSekDokEd.PA_KwotaBrutto.Visible then
+              if (fSekDokEd.DmEdycja.QSekDok.KWOTA_BRUTTO.IsNull
+                or (fSekDokEd.DmEdycja.QSekDok.KWOTA_BRUTTO.AsCurrency < 0)) then
+                  DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        11: if fSekDokEd.PA_WalutaDokumentu.Visible then
+              if fSekDokEd.DmEdycja.QSekDok.ID_WALUTA.IsNull then
+                DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        12: if fSekDokEd.PA_NrDokZew.Visible then
+              if (Trim(fSekDokEd.DmEdycja.QSekDok.NR_DOK_ZEW.AsString) = '') then
+                DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        13: if fSekDokEd.PA_Akwizytor.Visible then
+              if fSekDokEd.DmEdycja.QSekDok.ID_AKWIZYTOR.IsNull then
+                DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        14: if fSekDokEd.PA_Zlecenie.Visible then
+              if fSekDokEd.DmEdycja.QSekDok.ID_ZLEC.IsNull then
+                DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        15: if fSekDokEd.PA_JednOrg.Visible then
+              if fSekDokEd.DmEdycja.QSekDok.ID_JEDNORG.IsNull then
+                DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        16: if fSekDokEd.PA_Pracownik.Visible then
+              if fSekDokEd.DmEdycja.QSekDok.ID_PRACOWNIK.IsNull then
+                DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+
+        {10001: begin
+                 if fSekDokEd.PA_Przelew.Visible then
+                 begin
+                   if (fSekDokEd.DmEdycja.QSekDok.KONTOBANKOWE.IsNull
+                     or (Trim(fSekDokEd.DmEdycja.QSekDok.KONTOBANKOWE.AsString) = '')
+                     or fSekDokEd.DmEdycja.QSekDok.KWOTA_PRZELEW.IsNull
+                     or (fSekDokEd.DmEdycja.QSekDok.KWOTA_PRZELEW.AsCurrency <= 0)) then
+                       DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+                 end;
+               end;
+
+        10002: if fSekDokEd.PA_Przelew.Visible then
+                 if (fSekDokEd.DmEdycja.QSekDok.ZAAKCEPT_DO_PRZEL.AsInteger = 0) then
+                   DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+                   }
+
+        10003: if (TstTransaction(TstQuery(fSekDokEd.DS_PozSekDok.DataSet).Transaction).PodajzQuery(
+                 'count(p.id_poz)',
+                 'wyst_nagl_sekdok_dlapoz wnsp'
+                   + ' join poz p on wnsp.id_nagl = p.id_nagl',
+                 'wnsp.id_sekdok = ' + fSekDokEd.DmEdycja.QSekDok.ID_SEKDOK.AsString,
+                 '', '', '', '', '', '').AsInteger = 0) then
+                   DodajDoLoga(vLog, vDS.DataSet.FieldByName('nazwa').AsString);
+      end;
+      vDS.DataSet.Next;
+    end;
+  finally
+    CloseQuerySQL(vDS);
+  end;
+
+  vLogSlownikiPozycji := SprPozycjeSlownik;
+  if (vLogSlownikiPozycji <> '') then
+    DodajDoLoga(vLog, vLogSlownikiPozycji);
+
+  if (vLog <> '') then
+  begin
+    Result := False;
+    Inf('Nie wszystkie wymagane parametry zostały uzupełnione:' + #13 + #10 + vLog, 100);
+  end;
+end;
+
+procedure BBzapiszOnClick(Sender: TObject);
+begin
+  if not SprawdzParametry(IdEtapAkceptSzablon) then Exit;
+
+  fSekDokEd.BBzapiszClick(Sender);
+end;
+
+procedure A_AkceptujOnExecute(Sender: TObject);
+begin
+  if not SprawdzParametry(IdEtapAkceptSzablon) then Exit;
+
+  fSekDokEd.A_AkceptujExecute(Sender);
+end;
+
+procedure A_PrzekazDoOnExecute(Sender: TObject);
+begin
+  if not SprawdzParametry(IdEtapAkceptSzablon) then Exit;
+
+  fSekDokEd.A_PrzekazDoExecute(Sender);
+end;
+
+begin
+  if (Self is TfSekDokEd) then
+  begin
+    if (fSekDokEd = nil) then
+    begin
+      fSekDokEd := TfSekDokEd(Self);
+
+      fSekDokEd.PC_Main.OnChange := @PC_Main_OnChange;
+      fSekDokEd.DS_SekDodDokumZew.OnDataChange := @DS_SekDodDokumZewDataChange;
+
+      fSekDokEd.BBzapisz.OnClick := @BBzapiszOnClick;
+      fSekDokEd.A_Akceptuj.OnExecute := @A_AkceptujOnExecute;
+      fSekDokEd.A_PrzekazDo.OnExecute := @A_PrzekazDoOnExecute;
+    end;
+
+    IdEtapAkceptSzablon := PobIdEtapAkceptSzablon;
+    UstawBlokadeParametrow(IdEtapAkceptSzablon);
+     DodajPozycje;
+      UstawEditBtnsPolaWymaganeBlokowaneImage;
+
+
+
+  end;
+end.

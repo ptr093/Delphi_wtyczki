@@ -1,0 +1,721 @@
+// TfMat
+{$ADDTYPE TstQuery}
+{$ADDTYPE TKrDBGrid}
+{$ADDTYPE TStringList}
+{$ADDTYPE TstStringList}
+{$ADDTYPE TLogMagService}
+{$ADDTYPE TLogMagServicePlugins}
+{$ADDTYPE TFCzytajCos}
+{$ADDTYPE TfWindowPlugins}
+{$ADDTYPE TWindowPlugins}
+{$ADDTYPE TfCzytajCos}
+{$ADDTYPE TfMat}
+
+var
+  frm : TfMat;
+  IdUzytkownik: Integer;
+  LogStringList: TStringList;
+  PlikLog: string;
+  frmWp: TWindowPlugins;
+  dbgZakladka: TKrDBGrid;
+  IndexZakladki : integer;
+
+const
+  cKatalogLog = 'C:\STREAM soft\STREAM soft SQL\PLUGINS\Log\';//////do ustawienia;
+  cZapiszLog = False;
+  cPokazInf = False;
+  cKodUrzZew_DekomplRW = 'DEKOMPL_RW';
+  cPrefiksNrDok_DekomplRW = 'DKRW/';
+  cGenerator_DekomplRW = 'XXX_GEN_DEKOMPL_RW';
+  cIdUrzZew_DekomplRW = 10005;
+  cIdDefDok_DyspPrzyj = 10046;
+  cIdDefDok_DyspWyd = 10045;
+  cLineBreak = #13 + #10;
+
+procedure onChange(Sender: TObject; Field: TField);
+var
+  sql : String;
+begin
+  frm.DS_mainDataChange(Sender,Field);
+
+
+
+sql :='with  c as(' +
+' select     d.datadok,  D.NRDOKWEW, ' +
+' (select IloscZamowien   from   XXX_PODAJ_ILOSC_DYSPOZYCJI(10002,k.id_kartoteka,d.id_dysp,p.id_nagl)) as IloscZamowien, ' +
+' (select zrealizowano   from   XXX_PODAJ_ILOSC_DYSPOZYCJI(10002,k.id_kartoteka,d.id_dysp,p.id_nagl)) as Zrealizowano , '+
+' (select pozostalo   from   XXX_PODAJ_ILOSC_DYSPOZYCJI(10002,k.id_kartoteka,d.id_dysp,p.id_nagl)) as pozostlao '+
+' from DYSPSPRZ DSPRZ '+
+' left join DYSP D on (D.ID_DYSP = DSPRZ.ID_DYSP)'+
+' left join DEFDOK DD on (D.ID_DEFDOK = DD.ID_DEFDOK) '+
+' left join SPISDOK SS on (DD.ID_SPISDOK = SS.ID_SPISDOK) '+
+' left join UZYTKOWNIK UZ on (D.ID_UZYTKOWNIK = UZ.ID_UZYTKOWNIK) '+
+' left join poz p on  p.id_nagl = DSPRZ.ID_NAGL '+
+' left join KARTOTEKA K on (P.ID_KARTOTEKA = K.ID_KARTOTEKA) '+
+'where p.id_kartoteka =' + frm.DS_main.DataSet.FieldByName('ID_KARTOTEKA').AsString +
+' and  d.id_defdok in (10017) and '+
+' d.id_statusdysp not in (1, 3)) '+
+' select distinct c.ILOSCZAMOWIEN,c.ZREALIZOWANO,c.POZOSTLAO,c.DATADOK,c.NRDOKWEW from c '+
+' where c.IloscZamowien > 0 ';
+
+
+
+
+{  sql := ' select s.id_sekdok, CAST(coalesce(S.OPIS,'+QuotedStr('')+') AS VARCHAR(80)) as opis ' +
+         ' from sekdok s ' +
+         ' where s.id_sekdok = ' + frm.DS_main.DataSet.FieldByName('ID_NAGL').AsString  +
+         ' order by 2';   }
+  dbgZakladka.DataSource := OpenQuerySQL(sql,0);
+
+end;
+
+
+  procedure DodajZakladke;
+var
+  tControl : TstXPageControl;
+  tMojaZakladka : TTabSheet;
+  pPanel : TstPanel;
+  dbgMain : TKrDBGrid;
+  dsMain : TDataSource;
+begin
+  tControl := TstXPageControl(self.FindComponent('PC_dodinfo'));
+  if tControl <> nil then
+  begin
+    tMojaZakladka := TTabSheet(self.FindComponent('tMojaZakladka'));
+    if tMojaZakladka = nil then
+    begin
+      tMojaZakladka := TTabSheet.Create(self);
+      tMojaZakladka.Name := 'tMojaZakladka';
+      tMojaZakladka.Caption := 'Zamowienia Dysp(+)';
+      tMojaZakladka.PageControl := tControl;
+      //Panell
+      pPanel := TstPanel.Create(self);
+      pPanel.Name := 'pPanelZ';
+      pPanel.Parent := tMojaZakladka;
+      pPanel.Align := alClient;
+      pPanel.Caption := '';
+
+
+
+      dbgMain := TKrDBGrid(self.FindComponent('DBGmain'));
+      //DBGrid
+      dbgZakladka := TKrDBGrid.Create(Self);
+      dbgZakladka.Name := 'dbgPozycje2';
+      dbgZakladka.Parent := pPanel;
+      dbgZakladka.Left := 0;
+      dbgZakladka.Top := 0;
+      dbgZakladka.Width := 500;
+      dbgZakladka.Height := 100;
+      dbgZakladka.Align := alClient;
+      //dbgPozycje2.Options := [dgTitles, dgIndicator, dgColumnResize, dgColLines, dgRowLines, dgTabs, dgConfirmDelete, dgCancelOnExit];
+      dbgZakladka.ReadOnly := True;
+      dbgZakladka.TabOrder := 1;
+      if dbgMain <> nil then
+      begin
+     // dbgPozycje2.Font := dbgMain.Font;
+        dbgZakladka.TitleFont := dbgMain.TitleFont;
+        dbgZakladka.Options := dbgMain.Options;
+      end;
+
+
+
+      with dbgZakladka.Columns.Add do
+      begin
+        Expanded := False;
+        FieldName :='DATADOK'
+        Title.Caption := 'Data Dok.';
+        Width := 400;
+        Visible := true;
+      end;
+      with dbgZakladka.Columns.Add do
+      begin
+        Expanded := False;
+        FieldName := 'NRDOKWEW';
+        Title.Caption := 'Numer';
+        Width := 400;
+        Visible := True;
+      end;
+      with dbgZakladka.Columns.Add do
+      begin
+        Expanded := False;
+        FieldName := 'ZREALIZOWANO';
+        Title.Caption := 'Zrelizowano';
+        Width := 100;
+        Visible := True;
+      end;
+      with dbgZakladka.Columns.Add do
+      begin
+        Expanded := False;
+        FieldName := 'POZOSTLAO';
+        Title.Caption := 'Pozostało';
+        Width := 100;
+        Visible := True;
+      end;
+      with dbgZakladka.Columns.Add do
+      begin
+        Expanded := False;
+        FieldName := 'ILOSCZAMOWIEN';
+        Title.Caption := 'Ilość zam.';
+        Width := 100;
+        Visible := True;
+      end;
+
+      dsMain := TDataSource(self.FindComponent('DS_main'));
+      dsMain.OnDataChange:=@onChange;
+      IndexZakladki:=tControl.PageCount-1;
+
+      dsMain.OnDataChange(Self, nil);
+    end;
+  end;
+end;
+
+
+function PobNazwePlikuLog: string;
+var
+  vData: string;
+begin
+  DateTimeToString(vData, 'yyyy-MM-dd_hhmmss', Now);
+  Result := 'Log_' + vData + '.txt';
+end;
+
+procedure PrzygotujLog;
+begin
+  if not cZapiszLog then Exit;
+
+  if (LogStringList <> nil) then Exit;
+
+  LogStringList := TStringList.Create;
+
+  PlikLog := PobNazwePlikuLog;
+
+  LogStringList.SaveToFile(cKatalogLog + PlikLog);
+end;
+
+procedure DodajDoLogu(const ATekst: string);
+begin
+  if (LogStringList = nil) then Exit;
+
+  LogStringList.Append(DateTimeToStr(Now) + ': ' + ATekst);
+  LogStringList.SaveToFile(cKatalogLog + PlikLog);
+end;
+
+procedure InfLog(const AText: string);
+begin
+  DodajDoLogu(AText);
+  if cPokazInf then
+    Inf(AText, 100);
+end;
+
+function PobIdUzytk: Boolean;
+begin
+  Result := True;
+  IdUzytkownik := StrToIntDef(Trim(GetFromQuerySQL('SELECT ID_UZYTKOWNIK FROM uzytkownik WHERE login = ' + QuotedStr(GetUser), 1)), 0);
+  if (IdUzytkownik = 0) then
+  begin
+    Result := False;
+    Inf('Błąd przy określaniu użytkownika.', 100);
+  end;
+end;
+
+function JsonDoWynik(const AJson: string): Integer;
+var
+  s: string;
+  sl: TStringList;
+begin
+  Result := -1;
+
+  //{"Wynik":0,"Blad":0,"BladEx":0,"BladTxt":""}
+  s := Trim(AJson);
+  if (Length(s) = 0) then Exit;
+  s := Copy(s, 2, Length(s) - 2);
+  Zastap(',', #13 + #10, s);
+
+  sl := TStringList.Create;
+  try
+    sl.NameValueSeparator := ':';
+    sl.Text := s;
+    s := Trim(sl.Values['"Wynik"']);
+  finally
+    sl.Free;
+  end;
+
+  if (Length(s) = 0) then Exit;
+
+  Result := StrToInt(s);
+end;
+
+function WystawDyspWyd(const AIdNagl, AIdDefDokDysp: Integer): Integer;
+var
+  vSql: string;
+  vListaPoz: string;
+  vLogMagServicePlugins: TLogMagServicePlugins;
+  vIdDysp: Integer;
+  vBlad: string;
+begin
+  Result := -1;
+
+  DodajDoLogu('WystawDyspWyd - start');
+
+  vSql := 'select list(p.id_poz, ' + QuotedStr(';') + ')'
+       + ' from poz p'
+       + ' where p.id_nagl = ' + IntToStr(AIdNagl)
+       + ' and p.bazapoz = 0';
+
+  DodajDoLogu(vSql);
+
+  vListaPoz := Trim(GetFromQuerySQL(vSql, 0));
+  if (vListaPoz = '') then Exit;
+
+  DodajDoLogu('ListaPoz: ' + vListaPoz);
+
+  vLogMagServicePlugins := TLogMagServicePlugins.Create(Self);
+  try
+    vBlad := vLogMagServicePlugins.GenerujDyspozycjeZDok(
+             '{"ID_Nagl":' + IntToStr(AIdNagl) +
+             ',"ID_DefDokDysp":' + IntToStr(AIdDefDokDysp) +
+             ',"ListaPoz":"' + vListaPoz + '"}');
+
+    vIdDysp := JsonDoWynik(vBlad);
+    if not (vIdDysp > 0) then
+    begin
+      InfLog('Błąd przy generowaniu dyspozycji. ID_NAGL = ' + IntToStr(AIdNagl) + #13 + #10 + vBlad);
+      Exit;
+    end;
+
+    DodajDoLogu('IdDysp: ' + IntToStr(vIdDysp));
+  finally
+    vLogMagServicePlugins.Free;
+  end;
+
+  DodajDoLogu('WystawDyspWyd - koniec');
+
+  Result := vIdDysp;
+end;
+
+function WystawDyspPrzyjKompl(const AIdDefDokDysp: Integer; const AIdKartoteka: string; const AIlosc: Currency): Integer;
+var
+  vLogMagService: TLogMagService;
+  vBlad: string;
+  vIdDysp: Integer;
+  vSql: string;
+  vDS: TDataSource;
+  vIdPozDysp: Integer;
+begin
+  Result := -1;
+
+  DodajDoLogu('WystawDyspPrzyjKompl - start');
+
+  vLogMagService := TLogMagService.Create(Self);
+  try
+    vBlad := vLogMagService.DodajDokDyspozycjaMag(
+             '{"ID_DefDok":' + IntToStr(AIdDefDokDysp) +
+             ',"ID_Magazyn":' + IntToStr(frm.FlastMagId) + '}');
+
+    vIdDysp := JsonDoWynik(vBlad);
+    if not (vIdDysp > 0) then
+    begin
+      Inf('Błąd przy generowaniu dyspozycji wydania.' + #13 + #10 + vBlad, 100);
+      Exit;
+    end;
+
+    vSql := 'select S.ID_KARTOTEKA, S.ILOSC' +
+            ' from SKLKOMPLETU S' +
+            ' join KARTOTEKA K on K.ID_KARTOTEKA = S.ID_KARTOTEKA' +
+            ' join JM J on J.ID_JM = K.ID_JM' +
+            ' where (S.ID_KARTOTEKA_KOMP = ' + AIdKartoteka + ')' +
+            ' order by INDEKS ';
+
+    DodajDoLogu(vSql);
+    vDS := OpenQuerySQL(vSql, 0);
+    try
+      vDS.DataSet.First;
+      while not vDS.DataSet.Eof do
+      begin
+        vBlad := vLogMagService.DodajPozDyspozycjaMag(
+                  '{"ID_Dysp":' + IntToStr(vIdDysp) +
+                  ',"ID_Kartoteka":' + vDS.DataSet.FieldByName('id_kartoteka').AsString +
+                  ',"Ilosc":' + CurrToStrSt(vDS.DataSet.FieldByName('ilosc').AsCurrency * AIlosc) + '}');
+
+        vIdPozDysp := JsonDoWynik(vBlad);
+        if not (vIdPozDysp > 0) then
+        begin
+          Inf('Błąd przy dodawaniu pozycji do dyspozycji wydania.' + #13 + #10
+            + 'Dyspozycja: ' + IntToStr(vIdDysp)
+            + ', kartoteka: ' + vDS.DataSet.FieldByName('id_kartoteka').AsString
+            + #13 + #10 + vBlad, 100);
+          Exit;
+        end;
+
+        vDS.DataSet.Next;
+      end;
+    finally
+      CloseQuerySQL(vDS);
+    end;
+  finally
+    vLogMagService.Free;
+  end;
+
+  DodajDoLogu('WystawDyspPrzyjKompl - koniec');
+
+  Result := vIdDysp;
+end;
+
+function UzupelnijDokDysp(const AIdDysp: Integer; const AIdMscSkl: Integer; const AIlosc: Currency): Boolean;
+var
+  vSql: string;
+  vLogMagService: TLogMagService;
+  vBlad: string;
+  vDS: TDataSource;
+  vIdPozDyspPrzyg: Integer;
+begin
+  Result := False;
+
+  DodajDoLogu('UzupelnijDokDysp - start');
+
+  vLogMagService := TLogMagService.Create(Self);
+  try
+    vSql := 'select pd.id_pozdysp, pd.lp'
+         + ' from pozdysp pd'
+         + ' where pd.id_dysp = ' + IntToStr(AIdDysp)
+         + ' order by pd.lp';
+
+    DodajDoLogu(vSql);
+
+    vDS := OpenQuerySQL(vSql, 0);
+    try
+      vDS.DataSet.First;
+      while not vDS.DataSet.Eof do
+      begin
+        vBlad := vLogMagService.DodajPozPrzygDyspozycjaMag(
+                 '{"ID_PozDysp":' + vDS.DataSet.FieldByName('id_pozdysp').AsString +
+                 ',"IloscPrzyg":' + CurrToStrSt(AIlosc) +
+                 ',"ID_MscSkladowania_Z":' + IntToStr(AIdMscSkl) + '}');
+
+        vIdPozDyspPrzyg := JsonDoWynik(vBlad);
+        if not (vIdPozDyspPrzyg > 0) then
+        begin
+          InfLog('Błąd przy dodawaniu pozycji przygotowania do dyspozycji magazynowej.' + #13 + #10
+            + 'IdPozDysp: ' + vDS.DataSet.FieldByName('id_pozdysp').AsString + #13 + #10
+            + 'Lp: ' + vDS.DataSet.FieldByName('lp').AsString + #13 + #10 + vBlad);
+          Exit;
+        end;
+
+        DodajDoLogu('IdPozDyspPrzyg: ' + IntToStr(vIdPozDyspPrzyg));
+        vDS.DataSet.Next;
+      end;
+    finally
+      CloseQuerySQL(vDS);
+    end;
+  finally
+    vLogMagService.Free;
+  end;
+
+  DodajDoLogu('UzupelnijDokDysp - koniec');
+
+  Result := (JsonDoWynik(vBlad) > 0);
+end;
+
+procedure AkcjeKorIloscOnClick(Sender: TObject);
+var
+  vIlosc: String;
+  fCzytajCos: TfCzytajCos;
+
+begin
+  fCzytajCos := TfCzytajCos.Create(nil);
+  try
+    if not fCzytajCos.CzytajCos('Podaj ilość', vIlosc, 20, False, True) then Exit;
+
+    if (vIlosc <> '') and (StrStToCurr(vIlosc) > 0) then
+    begin
+      if (StrStToCurr(vIlosc) <= frmWp.fWindowsPlugins.QueryMain.FieldByName('STANDOSTEPNY').ASCURRENCY) then
+        frmWp.fWindowsPlugins.QueryMain.FieldByName('ilosc').newVALUE := vIlosc
+      else
+        inf300('Ilość jest większa niż stan');
+    end
+    else
+      inf300('Wprowadzono nieprawidłowa wartość ilości');
+  finally
+    fCzytajCos.Free;
+  end;
+end;
+
+procedure ShowWindowMscSkladowania(const AIdDyspWyd: Integer; const vIdKartoteka: string; const AIloscKart: Currency);
+var
+  vSql, aSqlSelect, aSqlFrom, aSqlWhere, aSqlGroupBy: String;
+  checkValues : TIntegerList;
+  vField: TField;
+  i: Integer;
+  ilosc: Currency;
+  vDataSource : TDataSource;
+  vCount: Integer;
+
+begin
+  if Assigned(frmWp) then Exit;
+
+  vSql := 'MSC.ID_MSCSKLADOWANIA, MSC.KOD, MSC.NAZWA, KSV1.ID_KARTOTEKA, sum(KSV1.STANDOSTEPNY) as STANDOSTEPNY, 0 as ilosc' +
+          ' from MSCSKLADOWANIA MSC' +
+          ' inner join MSCSKLADOWANIA_LISTA ML on ML.ID_MSCSKLADOWANIA_NAD = MSC.ID_MSCSKLADOWANIA' +
+          ' inner join KARTOTEKA_STANMSCLOG_VIEW KSV1 on (KSV1.ID_MSCSKLADOWANIA = ML.ID_MSCSKLADOWANIA) and (KSV1.ID_KARTOTEKA = ' + vIdKartoteka + ')' +
+          ' where ((MSC.ID_MAGAZYN = ' + IntToStr(frm.FlastMagId) +') and (MSC.KLU_RODZAJ = 0))' +
+          ' group by 1, 2, 3, 4' +
+          ' having(sum(KSV1.STANDOSTEPNY) > 0)';
+  //inf300('select ' + vSql);
+  vDataSource := OpenQuerySQL('select ' + vSql, 0);
+  try
+    vDataSource.DataSet.First;
+    while not vDataSource.DataSet.Eof do
+    begin
+      Inc(vCount);
+      if (vCount > 1) then Break;
+
+      vDataSource.DataSet.Next;
+    end;
+    if (vCount = 0) then
+    begin
+      inf300('Brak dostępnej ilości');
+      Exit;
+    end;
+    if (vCount = 1) then
+    begin
+      UzupelnijDokDysp(AIdDyspWyd, vDataSource.DataSet.FieldByName('ID_MSCSKLADOWANIA').ASINTEGER, AIloscKart);
+      Exit;
+    end;
+
+  finally
+    CloseQuerySQL(vDataSource);
+  end;
+
+  frmWp := TWindowPlugins.Create(0);
+
+  try
+    frmWp.Caption := 'Podaj ilości dla poszczegółlnych miejsc składowania';
+    frmWp.IdColumns := 'ID_MSCSKLADOWANIA';
+
+    aSqlSelect := 'MSC.ID_MSCSKLADOWANIA, MSC.KOD, MSC.NAZWA, KSV1.ID_KARTOTEKA, sum(KSV1.STANDOSTEPNY) as STANDOSTEPNY, 0.00 as ilosc';
+    aSqlFrom := 'MSCSKLADOWANIA MSC' +
+                ' inner join MSCSKLADOWANIA_LISTA ML on ML.ID_MSCSKLADOWANIA_NAD = MSC.ID_MSCSKLADOWANIA' +
+                ' inner join KARTOTEKA_STANMSCLOG_VIEW KSV1 on (KSV1.ID_MSCSKLADOWANIA = ML.ID_MSCSKLADOWANIA) and (KSV1.ID_KARTOTEKA = ' + vIdKartoteka + ')';
+    aSqlWhere := '((MSC.ID_MAGAZYN = ' + IntToStr(frm.FlastMagId) +') and (MSC.KLU_RODZAJ = 0))';
+    aSqlGroupBy := '1, 2, 3, 4 having(sum(KSV1.STANDOSTEPNY) > 0)';
+    frmWp.SqlSet(aSqlSelect, aSqlFrom, aSqlWhere, '', '', aSqlGroupBy);
+    frmWp.AddFields('MSCSKLADOWANIA', 'ID_MSCSKLADOWANIA;KOD;NAZWA', 'MSC');
+    frmWp.AddFields('KARTOTEKA_STANMSCLOG_VIEW', 'STANDOSTEPNY', 'KSV1');
+
+    vField := TBCDField.Create(TDataSet(frmWp.fWindowsPlugins.QueryMain));
+    vField.FieldName := 'ilosc';
+    vField.DisplayLabel := 'Ilość';
+    vField.DataSet := TDataSet(frmWp.fWindowsPlugins.QueryMain);
+    TBCDField(vField).DisplayFormat := '0.00';
+
+    frmWP.AddAction('Korekta ilości', 'warehouse_named_24', @AkcjeKorIloscOnClick);
+
+    if frmWp.ShowWindow(i) then
+    begin
+      try
+        checkValues := frmWp.fWindowsPlugins.QueryMain.GetListAll;
+        if (checkValues <> nil) and (checkValues.Count > 0) then
+        begin
+          for i := 0 to checkValues.Count - 1 do
+          begin
+            if (frmWp.fWindowsPlugins.QueryMain.Locate('ID_MSCSKLADOWANIA', checkValues.GetValue(i), [])) then
+            begin
+              ilosc := frmWp.fWindowsPlugins.QueryMain.FieldByName('ILOSC').ASCURRENCY;
+              if (ilosc > 0) then
+              begin
+                UzupelnijDokDysp(AIdDyspWyd, checkValues.GetValue(i), frmWp.fWindowsPlugins.QueryMain.FieldByName('ILOSC').ASCURRENCY);
+              end;
+            end;
+          end;
+        end;
+      finally
+        checkValues.Free;
+      end;
+    end;
+  finally
+    frmWp.Free;
+    frmWp := nil;
+  end;
+end;
+
+procedure WystawRW(Sender : TObject);
+var
+  vSql, vNrUzytk, vUwagi, vIdUrzZewNagl, vKartIndeks, vIdKartoteka, vLista, vIlosc, vBlad: string;
+  vIdNagl, i, vIdDyspPrzyj, vIdDyspWyd: Integer;
+  vListaIdKartoteka: TStringList;
+  fCzytajCos: TfCzytajCos;
+  vResult: Boolean;
+  vLogMagService: TLogMagService;
+  vStan: Currency;
+
+begin
+  //ShowWindowMscSkladowania(0, '15811');
+  vSql := 'select U.oznnrwydruzyt FROM UZYTKOWNIK U WHERE U.id_uzytkownik = ' + IntToStr(IdUzytkownik);
+  vNrUzytk := Trim(GetFromQuerySQL(vSql, 0));
+  vUwagi := GetUser + '_' + DateTimeToStr(Now);
+
+  if (frm.QueryMain.MarkCount <= 0) then Exit;
+
+  vLista := frm.QueryMain.GetMarkedRows
+  vLista := Trim(Copy(vLista, 2, Length(vLista) - 2));
+  Zastap(',', #13 + #10, vLista);
+  vListaIdKartoteka := TStringList.Create;
+  vListaIdKartoteka.Text := vLista;
+
+  for i := 0 to vListaIdKartoteka.Count - 1 do
+  begin
+    vIdKartoteka := vListaIdKartoteka[i];
+    if (frm.QueryMain.Locate('id_kartoteka', StrToInt(vIdKartoteka), [])) then
+      vStan := frm.DS_main.DataSet.FieldByName('STAN').ASCURRENCY;
+
+    vSql := 'select k.indeks FROM kartoteka k WHERE k.id_kartoteka = ' + vIdKartoteka;
+    vKartIndeks := Trim(GetFromQuerySQL(vSql, 0));
+
+    fCzytajCos := TfCzytajCos.Create(nil);
+    try
+      vIlosc := '';
+      vResult := fCzytajCos.CzytajCos('Ilość kartoteki ' + vKartIndeks, vIlosc, 20, False, True);
+    finally
+      fCzytajCos.Free;
+    end;
+    //inf300('Dodawanie nagĹ‚Ăłwka do urzÄ…dzenia zewnÄ™trznego');
+
+    if (vResult) then
+    begin
+      if (vIlosc <> '') and (StrStToCurr(vIlosc) > 0) then
+      begin
+        if (StrStToCurr(vIlosc) > vStan) then
+        begin
+          i := i - 1;
+          inf300('Podana ilość jest większa niż stan');
+          Continue;
+        end;
+
+        vSql := 'execute procedure URZZEWNAGL_ADD('
+              + '1, '
+              + QuotedStr(cKodUrzZew_DekomplRW) + ', '
+              + QuotedStr(vNrUzytk) + ', '
+              + 'null, null, null, 2, '
+              + 'current_date, '
+              + QuotedStr('RW') + ', '
+              + QuotedStr(cPrefiksNrDok_DekomplRW) + '||GEN_ID(' + cGenerator_DekomplRW + ', 1), '
+              + 'null, null, null, '
+              + '0, '
+              + 'null, null, null, null, ' + QuotedStr(vUwagi) + ')';
+
+        //DodajDoLogu(vSql);
+
+        if (ExecuteSQL(vSql, 0) = 1) then
+        begin
+          vSql := 'select max(u.id_urzzewnagl) from urzzewnagl u where u.odb_uwagi = ' + QuotedStr(vUwagi);
+
+          //DodajDoLogu(vSql);
+
+          vIdUrzZewNagl := Trim(GetFromQuerySQL(vSql, 0));
+          if (vIdUrzZewNagl = '') then
+          begin
+            InfLog('Nie pobrano nowo utworzonego nagłówka.');
+            Break;
+          end;
+
+          //DodajDoLogu('IdUrzZewNagl: ' + IntToStr(vIdUrzZewNagl));
+
+          vSql := 'update urzzewnagl'
+               + ' set odb_uwagi = null'
+               + ', jestuwaga = 0'
+               + ' where id_urzzewnagl = ' + vIdUrzZewNagl;
+
+          //DodajDoLogu(vSql);
+
+          if (ExecuteSQL(vSql, 0) <> 1) then
+          begin
+            InfLog('Błąd przy aktualizacji uwag dokumentu.');
+            Break;
+          end;
+        end else
+        begin
+          InfLog('Nie utworzono nagłówka urządzenia zewnętrznego.');
+          Break;
+        end;
+
+        //DodajDoLogu('Dodawanie pozycji do dokumentu urzÄ…dzenia zewnÄ™trznego');
+
+        vSql := 'execute procedure URZZEWPOZ_ADD('
+                 + vIdUrzZewNagl + ', '
+                 + QuotedStr(vKartIndeks) + ', '
+                 + 'cast(' + vIlosc + ' as numeric(18,4)), '
+                 + 'null, null, null)';
+
+        if (ExecuteSQL(vSql, 0) <> 1) then
+        begin
+          Inf('Nie utworzono pozycji urządzenia zewnętrznego.', 100);
+          Break;
+        end;
+
+        RealizujDokumentyOUZ(cIdUrzZew_DekomplRW, StrToInt(vIdUrzZewNagl));
+
+        vSql := 'select u.id_nagl from urzzewnagl u where u.id_urzzewnagl = ' + vIdUrzZewNagl;
+        vIdNagl := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), 0);
+        if (vIdNagl = 0) then
+        begin
+          InfLog('Nieokreślony dokument RW.');
+          Break;
+        end;
+
+        vIdDyspPrzyj := WystawDyspPrzyjKompl(cIdDefDok_DyspPrzyj, vIdKartoteka, StrStToCurr(vIlosc));
+        vIdDyspWyd := WystawDyspWyd(vIdNagl, cIdDefDok_DyspWyd);
+        if (vIdDyspPrzyj > 0) and (vIdDyspWyd > 0) then
+        begin
+          ShowWindowMscSkladowania(vIdDyspWyd, vIdKartoteka, StrStToCurr(vIlosc));
+
+          DodajDoLogu('RealizujDyspozycje');
+          vLogMagService := TLogMagService.Create(Self);
+          try
+            vBlad := vLogMagService.RealizujDyspozycje('{"ID_Dysp":' + IntToStr(vIdDyspWyd) + '}');
+            DodajDoLogu(vBlad);
+          finally
+            vLogMagService.Free;
+          end;
+
+          DodajDoLogu('Zmiana statusu dyspozycji przyjecia');
+
+          vSql := 'update DYSP'
+                + ' set ID_STATUSDYSP = 0'
+                + ' where ID_DYSP = ' + IntToStr(vIdDyspPrzyj);
+
+          if (ExecuteSQL(vSql, 0) <> 1) then
+          begin
+            Inf('Błąd przy zmianie statusu dyspozycji.', 100);
+            Exit;
+          end
+        end;
+      end
+      else
+      begin
+        i := i - 1;
+        inf300('Podano nieprawiłową');
+      end;
+    end;
+  end;
+end;
+
+begin
+  if (Self is TfMat) then
+  begin
+    if (frm = nil) then
+    begin
+      frm := Self as TfMat;
+    end;
+    if (frm <> nil) then
+    begin
+      if not PobIdUzytk then Exit;
+
+      PrzygotujLog;
+      DodajDoLogu('Uruchomiono proces generowania RW i dyspozycji przyjęcia, wydania:' + cLineBreak
+              + 'Data wykonania: ' + DateTimeToStr(Now) + cLineBreak
+              + 'Użytkownik: ' + GetUser + cLineBreak
+              + 'Stanowisko: ' + GetWorkStation);
+      PluginsAddAction(Self, 'Generuj RW, dyspozycje wydania i przyjęcia (Dekompletacja)', 'document_add_in_24', @WystawRW);
+      DodajZakladke;
+    end;
+  end;
+end.

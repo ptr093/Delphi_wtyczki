@@ -1,0 +1,32 @@
+ procedure onBeforeOpenDS(DataSet: TDataSet);
+var
+sql: string;
+vField: TField;
+begin
+
+
+ if (Pos('Z.NRZLECENIA, left(cast(Z.DATAPLANZAK as varchar(255)),16) AS DATAPLANZAK', frm.Q_Produkcja.SqlSelect) < 1) then
+BEGIN
+
+  sql := frm.Q_Produkcja.SqlSelect;
+  Zastap('Z.NRZLECENIA',
+  'Z.NRZLECENIA, left(cast(Z.DATAPLANZAK as varchar(255)),16) AS DATAPLANZAK', sql);
+
+ frm.Q_Produkcja.SqlSelect :=sql;
+
+END;
+  vField := frm.Q_Produkcja.FindFieldFromSqlName('DATAPLANZAK');
+  if (vField = nil) then
+  begin
+    vField := TStringField.Create(TDataSet(frm.Q_Produkcja));
+    vField.FieldName := 'DATAPLANZAK';
+    vField.DisplayLabel := 'Data planowanego zakończenia z MPS';
+    vField.DataSet := TDataSet(frm.Q_Produkcja);
+  end else
+    vField.Visible := True;
+
+
+end;
+
+
+frm.Q_Produkcja.BeforeOpen := @onBeforeOpenDS;

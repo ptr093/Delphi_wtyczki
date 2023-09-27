@@ -1,0 +1,388 @@
+//TfDokGmEdV2
+//------------------------------------------------------------------------------
+//2020-12-31 MS - OTRS: 2020/12/21/008929 dodanie kolumny Indeks Lightnet
+//                na zamówieniach od odbiorców
+//2021-02-16 MS - OTRS: 2021/02/08/001394 — Dodatkowa kolumna w planie wysyłek
+//                we wtyczce wbudowanej
+//                - komentarz #3 - dodanie kolumny Indeks Lightnet na dokumentach PW
+//------------------------------------------------------------------------------
+
+{$ADDTYPE TFDParams}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TfDokGmEdV2}
+
+type
+  TKolumnaDod = record
+    FieldName    : String;
+    FieldCaption : String;
+    DataType     : TFieldType;
+    SqlSelect    : String;
+    SqlFrom      : String;
+    Width        : Integer;
+  end;
+
+var
+  frm             : TfDokGmEdV2;          // deklaracja głównej zmiennej okna
+  ListKolDod      : array of TKolumnaDod; //Definicja rekordów TKolumnaDod uzupełnianmy w DefiniujKolumnyDodatkowe()
+
+  SqlSelectDef    : String;
+  sqlFromDef      : String;
+  idNaglPozDok    : Integer;
+
+  stronaPozPozDok : Integer;
+  PozwolDodacKolumny : Boolean; //MS 2021-02-05 po aktualizacji ponownie pojawił się problem - dodatkowa zmienna która blokuje możliwość dodawania kolumn jeśli jesteśmy w trybie ich usuwania.
+const
+  cStronaKolumn = 0;
+
+//******************************************************************************
+procedure ZmienBorderIcons(Wlacz: Boolean);
+begin
+  //W LIGHTNET jeśli dodaliśmy kolumny i próbujemy zamknąć okno przez X z SystemMenu to PRESTIŻ się zawiesza.
+  //Więc jeśli Dodalimy kolumny to wyłaczamy BorderIcons
+  if Wlacz then
+    frm.BorderIcons := [biSystemMenu, biMinimize, biMaximize]
+  else
+    frm.BorderIcons := [];
+end;
+//------------------------------------------------------------------------------
+function OdpowiednieDokumenty(): Boolean;
+begin
+  Result := (frm.PluginID_GrupaDok = 80) //80 - zamóweienia od odbiorców.
+            or (frm.PluginID_GrupaDok = 30) //30 - Przychód Wew.
+end;
+//------------------------------------------------------------------------------
+procedure DefiniujKolumnyDodatkowe();
+var vKol : TKolumnaDod;
+begin
+  SetLength(ListKolDod, 1);
+
+  vKol.FieldName       := 'KartIndexLightnet';
+    vKol.FieldCaption  := 'Indeks LIGHTNET';
+    vKol.DataType      := ftString;
+    vKol.Width         := 100;
+    vKol.SqlSelect     := ' ,CAST(AKN.NAZWA AS VARCHAR(100)) AS KartIndexLightnet';
+    vKol.SqlFrom       := ' LEFT JOIN KARTNAZWY AKN ON P.id_kartoteka = AKN.ID_KARTOTEKA AND AKN.id_typnazwakart = 10004';
+  ListKolDod[0] := vKol;
+end;
+//------------------------------------------------------------------------------
+function ZwrocGridDodKol() : TKrDBGrid;
+begin
+  //Zwraca KrGrid związany z dodatkowymi kolumnami
+  Result := frm.DBG_PozDok;
+end;
+//------------------------------------------------------------------------------
+function ZwrocQueryDodKol() : TstQuery;
+var vGrid : TKrDBGrid;
+begin
+  Result := nil;
+
+  //Zwraca Query związana z gridem dodadatkowych kolumn
+  vGrid := ZwrocGridDodKol();
+  if Assigned(vGrid) then
+    Result := TstQuery(vGrid.DataSource.DataSet)
+  else
+    UwagaOk('Brak komponentu TKrGrid dla dodatkowych kolumn.');
+end;
+//------------------------------------------------------------------------------
+procedure DodajKolumne(AKolDod: TKolumnaDod);
+var
+  vKrGrid : TKrDBGrid;
+  vQuery  : TstQuery;
+  vField  : TField;
+  vColumn : TColumn;
+begin
+  if (AKolDod.FieldName = '') then //MS nic nie robimy jeśi nie ma pełnej definicji kolumny
+    Exit;
+
+ //Dodanie pola do DataSet
+  vQuery := ZwrocQueryDodKol();
+  if (POS(AKolDod.SqlSelect, vQuery.SqlSelect) = 0) then //Jeśli w zapytaniu nie ma FiledName to nic nie dodajemy
+    Exit;
+
+  vField := vQuery.FindFieldFromSqlName(AKolDod.FieldName);
+  if not Assigned(vField) then
+  begin
+    case AKolDod.DataType of
+      ftString   : vField := TStringField.Create(TDataSet(vQuery));
+      ftBCD      : vField := TBCDField.Create(TDataSet(vQuery));
+      ftInteger  : vField := TIntegerField.Create(TDataSet(vQuery));
+      ftFloat    : vField := TFloatField.Create(TDataSet(vQuery));
+      ftCurrency : vField := TCurrencyField.Create(TDataSet(vQuery));
+      ftDateTime : vField := TDateTimeField.Create(TDataSet(vQuery));
+      ftDate     : vField := TDateField.Create(TDataSet(vQuery));
+      ftTime     : vField := TTimeField.Create(TDataSet(vQuery));
+      ftBlob     : vField := TBlobField.Create(TDataSet(vQuery));
+      ftMemo     : vField := TMemoField.Create(TDataSet(vQuery));
+      ftBoolean  : vField := TBooleanField.Create(TDataSet(vQuery));
+      else
+      begin
+       UwagaOk('Nie znany lub nie obsługiwany typ TKolumnaDod.DataType - nie można dodać kolumny dodatkowej.');
+       Exit;
+      end; //else case
+    end; //case
+
+    vField.FieldName    := AKolDod.FieldName;
+    vField.DisplayLabel := AKolDod.FieldCaption;
+    vField.DataSet      := TDataSet(vQuery);
+    vField.Visible      := True;
+  end; //not Assigned(vField)
+
+  if not Assigned(vField) then
+  begin
+    vColumn := vKrGrid.FindColumn(AKolDod.FieldName);
+    if Assigned(vColumn) then
+      vKrGrid.DeleteColumn(vColumn.Index);
+
+    Exit;
+  end;
+
+  //Dodanie kolumny do Grida
+  vKrGrid := ZwrocGridDodKol();
+  vColumn := vKrGrid.FindColumn(vField.FieldName);
+  if not Assigned(vColumn) then
+  begin
+    vColumn               := vKrGrid.Columns.Add;
+    vColumn.Expanded      := False;
+    vColumn.FieldName     := vField.FieldName;
+    vColumn.Title.Caption := vField.DisplayLabel;
+    vColumn.Width         := AKolDod.Width;
+    vColumn.Visible       := True;
+  end;
+end;
+//------------------------------------------------------------------------------
+procedure UsunKolumne(const AFieldName: String);
+var
+  vColumn : TColumn;
+  vQuery  : TstQuery;
+  vField  : TField;
+begin
+  if (AFieldName = '') then //MS nic nie robimy jeśi nie ma pełnej definicji kolumny
+    Exit;
+
+  vColumn := frm.DBG_PozDok.FindColumn(AFieldName);
+  if Assigned(vColumn) then
+    frm.DBG_PozDok.Columns.Delete(vColumn.Index);
+
+  vQuery := ZwrocQueryDodKol();
+  vField := vQuery.FindFieldFromSqlName(AFieldName);
+  if Assigned(vField) then
+    vQuery.Fields.Remove(vField);
+end;
+//------------------------------------------------------------------------------
+procedure ZmienQuerySql(const ASelect, AFrom: String);
+var
+  vQuery : TstQuery;
+begin
+  vQuery := ZwrocQueryDodKol();
+
+  vQuery.stClose('');
+
+  vQuery.SqlSelect   := ASelect;
+  vQuery.SqlFrom     := AFrom;
+
+  vQuery.stPrepare('');
+  vQuery.Params.SetParamValues('ID_NAGL', idNaglPozDok);
+  vQuery.Params.SetParamValues('STRONAPOZ', stronaPozPozDok);
+
+  //inf300(vQuery.SQL.text);
+
+  vQuery.stOpen('');
+end;
+//------------------------------------------------------------------------------
+procedure DodatkoweKolumnyDodaj(AZmienQuerySQL: Boolean);
+var
+  vSqlSelect : String;
+  vSqlFrom   : String;
+  vKol       : TKolumnaDod;
+  i          : Integer;
+begin
+  if not PozwolDodacKolumny then
+    Exit;
+
+  if not Assigned(ZwrocGridDodKol()) then
+    Exit;
+
+  if (frm.FAktZbiorKolumn <> cStronaKolumn) then
+    Exit;
+
+  if AZmienQuerySQL then
+  begin
+    vSqlSelect := SqlSelectDef;
+    vSqlFrom   := sqlFromDef;
+
+    for i := Low(ListKolDod) to High(ListKolDod) do
+    begin
+      vKol := ListKolDod[i];
+
+      if (POS(vKol.SqlSelect, vSqlSelect) = 0) then //Może być już taki SELECT więc go nie dodajemy (kilka kolumn z tego samego zapytania)
+        vSqlSelect := vSqlSelect + vKol.SqlSelect;
+
+      if (POS(vKol.SqlFrom, vSqlFrom) = 0) then
+        vSqlFrom   := vSqlFrom + vKol.SqlFrom;
+    end; //for
+
+    ZmienQuerySql(vSqlSelect, vSqlFrom);
+  end; //if AZmienQuerySQL
+
+  //Dodajemy wszystkie kolumny z listy
+  for i := Low(ListKolDod) to High(ListKolDod) do
+  begin
+    vKol := ListKolDod[i];
+    DodajKolumne(vKol);
+  end; //for
+
+  ZmienBorderIcons(False);
+end;
+//------------------------------------------------------------------------------
+procedure DodatkoweKolumnyUsun(AZmienQuerySQL: Boolean);
+var
+  vKol : TKolumnaDod;
+  i    : Integer;
+begin
+  try
+    PozwolDodacKolumny := False;
+    if not Assigned(ZwrocGridDodKol()) then
+      Exit;
+
+    //Usuwamy wszystkie kolumny z listy
+    for i := Low(ListKolDod) to High(ListKolDod) do
+    begin
+      vKol := ListKolDod[i];
+      UsunKolumne(vKol.FieldName);
+    end; //for
+
+    if AZmienQuerySQL then
+      ZmienQuerySql(SqlSelectDef, SqlFromDef); //Wracamy do domyślnego SQL_a
+
+    ZmienBorderIcons(True);
+  finally
+    PozwolDodacKolumny := True;
+  end; //try..finally
+end;
+//------------------------------------------------------------------------------
+procedure QueryBeforeOpen(DataSet: TDataSet);
+begin
+  if OdpowiednieDokumenty()
+    and (frm.FAktZbiorKolumn = cStronaKolumn)
+  then
+    DodatkoweKolumnyDodaj(False)  //Wywołujemy bez zmiany SQL-a
+  else
+    DodatkoweKolumnyUsun(False);  //MS 2021-01-26 Musimy usuwać kolumny bo w LIGHTNET jest problem.
+end;
+//------------------------------------------------------------------------------
+procedure PobierzDaneZQuery();
+var
+  vQuery : TstQuery;
+begin
+  if not Assigned(ZwrocGridDodKol()) then
+    Exit;
+
+  vQuery       := ZwrocQueryDodKol();
+  SqlSelectDef := vQuery.SqlSelect;
+  SqlFromDef   := vQuery.SqlFrom;
+
+  idNaglPozDok    := String(vQuery.Params.GetParamValues('ID_NAGL'));
+  stronaPozPozDok := String(vQuery.Params.GetParamValues('STRONAPOZ'));
+end;
+//------------------------------------------------------------------------------
+procedure ZmianaKolumn(Sender: TObject);
+begin
+  if OdpowiednieDokumenty() then
+  begin
+    DodatkoweKolumnyUsun(False);
+
+    frm.AD_ZbiorKolumnExecute(Sender);
+
+    PobierzDaneZQuery();
+    DodatkoweKolumnyDodaj(True);
+  end
+  else
+    frm.AD_ZbiorKolumnExecute(Sender);
+end;
+//------------------------------------------------------------------------------
+procedure WyborKolumn(Sender: TObject);
+begin
+  if OdpowiednieDokumenty() then
+  begin
+    DodatkoweKolumnyUsun(False);
+
+    frm.AD_WyborKolumnExecute(Sender);
+
+    PobierzDaneZQuery()
+    DodatkoweKolumnyDodaj(True);
+  end
+  else
+    frm.AD_WyborKolumnExecute(Sender);
+end;
+//------------------------------------------------------------------------------
+procedure FormActivate(Sender: TObject);
+var
+  vQuery : TstQuery;
+  idPoz  : Integer;
+begin
+  frm.FormActivate(Sender);
+  frm.FormActivate2(Sender);
+
+  if OdpowiednieDokumenty() then
+  begin
+    vQuery  := ZwrocQueryDodKol();
+    idPoz   := vQuery.FieldByName('Id_poz').AsInteger;
+
+    DodatkoweKolumnyDodaj(True);
+    vQuery.Locate('id_poz', idPoz, []);
+  end;
+end;
+//------------------------------------------------------------------------------
+procedure FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  //dodana jedna kolumna pr 09.08.23 jeden if
+  if(frm.FAktZbiorKolumn <> 1)then
+  if OdpowiednieDokumenty() then
+  begin
+    if (Action <> caNone) then
+      DodatkoweKolumnyUsun(True);
+  end;
+
+  frm.FormClose(Sender, Action);
+end;
+//------------------------------------------------------------------------------
+procedure AD_ZamknijDok_OnExecute(Sender: TObject);
+begin
+  //MS 2021-01-02 W LIGHTNET trzeba jeszcze obzsłużyć zdarzenie zamknięcia dokumentu pod przyciskiem i usunąć kolumny bo się nie zamyka okinko
+  if OdpowiednieDokumenty() then
+    DodatkoweKolumnyUsun(True);
+
+  frm.AD_ZamknijDokExecute(Sender);
+end;
+//******************************************************************************
+begin
+  //DebugClassStr('TfDokGmEdV2');
+
+  if (Self is TfDokGmEdV2) then
+  begin
+    if (frm = nil) then
+    begin
+      frm := TfDokGmEdV2(Self);
+      //WriteComponentResFile('.' + frm.ClassName + '.dfm', TComponent(frm));
+    end;
+
+    if OdpowiednieDokumenty() then
+    begin
+      //dodane dwie kolumny pr 09.08.23
+      frm.FAktZbiorKolumn:=1;
+      PozwolDodacKolumny:=false;
+
+      TstQuery(frm.DS_PozDok.DataSet).BeforeOpen := @QueryBeforeOpen;
+      frm.OnActivate := @FormActivate;
+      frm.OnClose    := @FormClose;
+
+      frm.AD_ZbiorKolumn.OnExecute := @ZmianaKolumn;
+      frm.AD_WyborKolumn.OnExecute := @WyborKolumn;
+      frm.AD_ZamknijDok.OnExecute  := @AD_ZamknijDok_OnExecute;
+
+      DefiniujKolumnyDodatkowe(); //Definicja dodatkowych kolumn
+      PozwolDodacKolumny := True;
+      PobierzDaneZQuery();
+    end
+  end;
+end.

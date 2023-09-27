@@ -1,0 +1,162 @@
+ {$ADDTYPE TfSekRodzajDok}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TstPopupMenu}
+{$ADDTYPE TKrDBGrid}
+{$ADDTYPE TTabSheet}
+{$ADDTYPE TfSekDokPozEd}
+{$AT TDotNetPrestiz}
+var
+  mf : TfSekRodzajDok;
+  asd: TfSekDokPozEd;
+  ID_KONTRAH: string;
+  Id_kartoteka: string;
+  idTypPozycji: string ;
+
+procedure ShowWindowKontrahent();
+var
+  aSqlSelect, aSqlFrom, aSqlWhere, aSqlOrderBy, aSqlOrderType, aSqlGroupBy: String;
+  vSql:String;
+  checkValues: string;
+  vDataSource: TDataSource;
+  frmWp: TWindowPlugins;
+  wDNRun: TDotNetPrestiz;
+  res : string;
+
+
+begin
+
+  if Assigned(frmWp) then Exit;
+  frmWp := TWindowPlugins.Create(0);
+  try
+      frmWp.Caption := 'Wybierz Kontrahenta';
+      frmWp.IdColumns := 'ID_KONTRAH';
+
+
+
+      aSqlSelect := 'KT.ID_KONTRAH,DK.NAZWADL'
+                 //  +'KT.ID_AKWIZYTORDEF, KT.ID_ZRODLO_DANYCH_WRA, KT.JESTKONTOBANK, DK.ID_KONTRAH as ID, DK.ID_DANEKONTRAH,'
+                  // +'DK.NIP, DK.NIPW, DK.MIEJSCOWOSC, DK.ULICA, DK.NRDOMU, DK.ID_KRAJ, KR.KODKRAJU,'
+                  // +'WC10050.WARTOSC_S as WC10050, KP1.ID_KONTRAH_PRIORYTET, KP1.KOLOR, OZN.NR_OZNACZDOK'
+      aSqlFrom := 'KONTRAH KT '
+                  +'inner join KONTRAH_PRIORYTET KP1 on (KT.ID_KONTRAH_PRIORYTET = KP1.ID_KONTRAH_PRIORYTET)'
+                  +'left outer join DANEKONTRAH DK on (KT.ID_KONTRAH = DK.ID_KONTRAH) and (DK.BAZADANEKONTRAH = 1)'
+                  +'left outer join KRAJ KR on (DK.ID_KRAJ = KR.ID_KRAJ)'
+                  +'left outer join WYSTCECHYKONTRAH_VIEW WC10050 on (KT.ID_KONTRAH = WC10050.ID_KONTRAH) and (WC10050.ID_CECHA = 10050)'
+                  +'left outer join OZNACZDOK OZN on (KT.ID_KONTRAH = OZN.ID_VALUE) and (OZN.ID_UZYTKOWNIK = 12) and (OZN.RODZAJ = 10)'
+
+      aSqlWhere := 'KT.NIEHANDLOWYW = 0 and KT.BAZAKONTRAH = 0';
+      //aSqlOrderBy := 'KT.NRKONTRAH';
+      //aSqlOrderType := 'ASC';
+      //aSqlGroupBy := '';
+      frmWp.SqlSet(aSqlSelect, aSqlFrom, aSqlWhere, aSqlOrderBy, aSqlOrderType, aSqlGroupBy);
+
+
+      //frmWp.AddFields('TYPEMAIL', 'NAZWATYPU', 'TM');
+      //frmWp.AddFields('OSOBAKONTRAH', 'NAZWISKOIMIE', 'O');
+      //frmWp.AddFields('EMAILOSOBAKTR', 'EMAIL;ID_EMAILOSOBAKTR', 'E');
+      //frmWp.AddFields('KONTRAH', 'NAZWASKR', 'K');
+      if frmWp.ShowWindowCheckStr(checkValues) then
+      begin
+        if (checkValues <> '') then
+        begin
+          ID_KONTRAH := checkValues;
+          //vSQL := 'SELECT E.EMAIL FROM EMAILOSOBAKTR E JOIN TYPEMAIL TM on (TM.ID_TYPEMAIL = E.ID_TYPEMAIL) WHERE E.ID_EMAILOSOBAKTR ';
+
+        end;
+      end;
+  finally
+      frmWp.Free;
+      frmWp := nil;
+  end;
+    wDNRun :=  TDotNetPrestiz.Create;
+    res := wDNRun.RunDotNetProgram('Glass4Cars_Grid', ID_KONTRAH+'|'+Id_kartoteka+'|'+idTypPozycji,'');
+
+  wDNRun.Free;
+end;
+
+
+procedure ShowWindow();
+var
+  aSqlSelect, aSqlFrom, aSqlWhere, aSqlOrderBy, aSqlOrderType, aSqlGroupBy: String;
+  vSql:String;
+  vDataSource: TDataSource;
+  frmWp: TWindowPlugins;
+  checkValues: string;
+
+
+
+begin
+
+  if Assigned(frmWp) then Exit;
+  frmWp := TWindowPlugins.Create(0);
+  try
+      frmWp.Caption := 'Wybierz Kartoteke';
+      frmWp.IdColumns := 'Id_Kartoteka';
+
+
+
+      aSqlSelect := 'KT.Id_Kartoteka, KT.INDEKS, KT.NAZWASKR, KT.NAZWADL, KT.JESTUWAGA, KT.AKTYWNY, KT.EWIVAT7, KT.ID_SLOWNIK, KP1.id_kart_priorytet, KP1.kolor, OZN.NR_OZNACZDOK'
+      aSqlFrom := 'KARTOTEKA KT INNER JOIN KART_PRIORYTET KP1 ON (KT.ID_KART_PRIORYTET = KP1.ID_KART_PRIORYTET)'
+                  +'LEFT OUTER JOIN OZNACZDOK OZN ON (KT.ID_KARTOTEKA = OZN.ID_VALUE) AND (OZN.ID_UZYTKOWNIK = 12) AND (OZN.RODZAJ = 9)'
+
+      aSqlWhere := 'KT.Id_RodzajKart in (4,5,7,8)';
+
+      frmWp.SqlSet(aSqlSelect, aSqlFrom, aSqlWhere, aSqlOrderBy, aSqlOrderType, aSqlGroupBy);
+
+      if frmWp.ShowWindowCheckStr(checkValues) then
+      begin
+        if (checkValues <> '') then
+        begin
+               Id_kartoteka:= checkValues;
+          end;
+        end;
+  finally
+      frmWp.Free;
+      frmWp := nil;
+  end;
+     ShowWindowKontrahent();
+end;
+
+
+
+
+ procedure ZaladujSzablon(seder : TObject);
+var
+  IdPrzelew: string;
+  i: integer;
+  vLista: string;
+  vIdPrzelewu: string;
+  sql: string;
+  vListaIdPrzelew: TStringList;
+begin
+  //przygotowanie vListaIdPrzelew z id_przelewy zaznaczonych pozycji
+
+  vIdPrzelewu := inttostr(mf.QueryMain.FieldByName('ID_SEKRODZAJDOK').AsInteger);
+
+   sql:='select  RD.id_typpozycji from SEKRODZAJDOK RD where ID_SEKRODZAJDOK=' +vIdPrzelewu;
+
+  idTypPozycji := GetFromQuerySQL(Sql, 0);
+  if (mf.QueryMain.MarkCount > 0) then
+    vLista := mf.QueryMain.GetMarkedRows
+  else
+  vLista := '(' + vIdPrzelewu + ')';
+  vLista := Trim(Copy(vLista, 2, Length(vLista) - 2));
+  Zastap(',', #13 + #10, vLista);
+  vListaIdPrzelew := TStringList.Create;
+  vListaIdPrzelew.Text := vLista;
+  for i := 0 to vListaIdPrzelew.Count - 1 do
+  begin
+    IdPrzelew := vListaIdPrzelew[i];
+     ShowWindow();
+  end;
+  mf.QueryMain.Refresh;
+end;
+
+begin
+
+if not (self is TfSekRodzajDok) then exit;
+      mf := TfSekRodzajDok(self);
+
+
+  PluginsAddAction(Self, 'Uruchom Szablon', 'Attach', @ZaladujSzablon);
+end.

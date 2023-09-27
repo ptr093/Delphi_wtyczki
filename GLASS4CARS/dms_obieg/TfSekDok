@@ -1,0 +1,204 @@
+//TfSekDok
+{$ADDTYPE TstMenuFlatButton}
+{$ADDTYPE TSelectFromListType}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TfSekDok}
+
+var
+  fSekDok: TfSekDok;
+  IdUzytkownik: Integer;
+  AD_WystDokHMEvent: TNotifyEvent;
+  AD_WystDokFKEvent: TNotifyEvent;
+
+function PobIdUzytk: Boolean;
+begin
+  Result := True;
+  IdUzytkownik := StrToIntDef(Trim(GetFromQuerySQL('SELECT ID_UZYTKOWNIK FROM uzytkownik WHERE login = ' + QuotedStr(GetUser), 1)), 0);
+  if (IdUzytkownik = 0) then
+  begin
+    Result := False;
+    Inf('Błąd przy określaniu użytkownika.', 100);
+  end;
+end;
+
+procedure DodajDoLoga(var ALog: string; const AText: string);
+begin
+  if (ALog <> '') then
+    ALog := ALog + #13 + #10;
+  ALog := ALog + AText;
+end;
+
+function SprawdzParametryObiegu(const AIdSekDok: Integer): string;
+var
+  vLog: string;
+  vSql: string;
+  vDS: TDataSource;
+begin
+  Result := '';
+
+  if (AIdSekDok < 0) then Exit;
+
+  vLog := '';
+
+  vSql := 'select wynik'
+       + ' from xxx_dms_spr_wym_par(' + IntToStr(AIdSekDok) + ')';
+
+  vDS := OpenQuerySQL(vSql, 0);
+  try
+    vDS.DataSet.First;
+    while not vDS.DataSet.Eof do
+    begin
+      DodajDoLoga(vLog, vDS.DataSet.FieldByName('wynik').AsString);
+      vDS.DataSet.Next;
+    end;
+  finally
+    CloseQuerySQL(vDS);
+  end;
+
+  if (vLog <> '') then
+  begin
+    vSql := 'select sd.nr_rej || ' + QuotedStr(' (') + ' || rsd.nazwa || ' + QuotedStr(')')
+         + ' from sekdok sd'
+         + ' inner join sekrodzajdok rsd on sd.id_sekrodzajdok = rsd.id_sekrodzajdok'
+         + ' where sd.id_sekdok = ' + IntToStr(AIdSekDok);
+
+    Result := 'Obieg DMS: ' + GetFromQuerySQL(vSql, 0) + ':' + #13 + #10 + vLog;
+  end;
+end;
+
+procedure AkceptujZaznaczone(Sender: TObject);
+var
+  vID_SEKDOK: Integer;
+  vListaIdSekDok: string;
+  vSql: string;
+  vBlad: Boolean;
+  vStrList: TStringList;
+  vLog: string;
+  vTemp: string;
+  i: Integer;
+begin
+  if (IdUzytkownik = 0) then Exit;
+
+  if fSekDok.QueryMain.FieldByName('ID_SEKDOK').IsNull then Exit;
+  vID_SEKDOK := fSekDok.QueryMain.FieldByName('ID_SEKDOK').AsInteger;
+
+  if (fSekDok.QueryMain.MarkVisibleCount > 0) then
+    vListaIdSekDok := fSekDok.QueryMain.GetMarkedRowsasString(sftMarked, 'ID_SEKDOK')
+  else
+    vListaIdSekDok := IntToStr(vID_SEKDOK);
+
+  Zastap(',', #13 + #10, vListaIdSekDok);
+
+  vLog := '';
+
+  vStrList := TStringList.Create;
+  try
+    vStrList.Text := vListaIdSekDok;
+    for i := 0 to vStrList.Count - 1 do
+    begin
+      vTemp := SprawdzParametryObiegu(StrToIntDef(Trim(vStrList.Strings[i]), -1));
+      if (vTemp <> '') then
+        DodajDoLoga(vLog, vTemp);
+    end;
+  finally
+    vStrList.Free;
+  end;
+
+  if (vLog <> '') then
+  begin
+    Inf('Nie wszystkie wymagane parametry zostały uzupełnione:' + #13 + #10 + vLog, 100);
+    Exit;
+  end;
+
+  if not PytTN('Czy zaakceptować wybrane obiegi ?', 100) then Exit;
+
+  vBlad := False;
+
+  vStrList := TStringList.Create;
+  try
+    vStrList.Text := vListaIdSekDok;
+    for i := 0 to vStrList.Count - 1 do
+    begin
+      vSql := 'execute procedure xxx_dms_nastepny_etap(' + Trim(vStrList.Strings[i]) + ', ' + IntToStr(fSekDok.fId_Uzytkownik) + ')';
+
+      if (ExecuteSQL(vSql, 0) <> 1) then
+        vBlad := True;
+    end;
+  finally
+    vStrList.Free;
+  end;
+
+  if vBlad then
+    Inf('Nie wszystkie obiegi zostały zaakceptowane z powodu błędów.', 100)
+  else
+    Inf('Zakończono akceptację obiegów.', 100);
+
+  fSekDok.AS_RefreshExecute(nil);
+end;
+
+procedure WystDokFKHM;
+var
+  vID_SLOWNIK: String;
+  vID_SEKDOK: Integer;
+  vSql : String;
+begin
+  if fSekDok.QueryMain.FieldByName('ID_SEKDOK').IsNull then Exit;
+
+  vID_SEKDOK := fSekDok.QueryMain.FieldByName('ID_SEKDOK').AsInteger;
+
+  vSql := 'Select ID_SLOWNIK FROM SEKDOK SEK' +
+          ' JOIN PRACOWNIK P ON (P.ID_PRACOWNIK = SEK.ID_PRACOWNIK)' +
+          ' WHERE ID_SEKDOK = ' + IntToStr(vID_SEKDOK);
+  vID_SLOWNIK := GetFromQuerySQL(vSql, 0);
+
+  if (vID_SLOWNIK <> '') then
+  begin
+    SetGlobalData('WYST_DOK_HM_FK_ID_SLOWNIK', vID_SLOWNIK);
+  end;
+end;
+
+procedure AD_WystDokHM_OnClick(Sender: TObject);
+begin
+  try
+    WystDokFKHM;
+    SetGlobalData('WYST_DOK_FK_HM', 1);
+    AD_WystDokHMEvent(Sender);
+  finally
+    SetGlobalData('WYST_DOK_FK_HM', 0);
+    SetGlobalData('WYST_DOK_HM_FK_ID_SLOWNIK', 0);
+  end;
+end;
+
+procedure AD_WystDokFK_OnClick(Sender: TObject);
+begin
+  try
+    WystDokFKHM;
+    SetGlobalData('WYST_DOK_FK_HM', 1);
+    AD_WystDokFKEvent(Sender);
+  finally
+    SetGlobalData('WYST_DOK_FK_HM', 0);
+    SetGlobalData('WYST_DOK_HM_FK_ID_SLOWNIK', 0);
+  end;
+end;
+
+begin
+  if (Self is TfSekDok) then
+  begin
+    if (fSekDok = nil) then
+    begin
+    fSekDok := Self as TfSekDok;
+
+      if (fSekDok.WindowId = 65300) then
+      begin
+        if PobIdUzytk then
+          PluginsAddAction(Self, 'Akceptuj zaznaczone', 'check_blue_all_24', @AkceptujZaznaczone);
+
+        AD_WystDokHMEvent := fsekdok.MB_DokHM.OnClick;
+        fsekdok.MB_DokHM.OnClick := @AD_WystDokHM_OnClick;
+
+        AD_WystDokFKEvent := fsekdok.MB_DokFK.OnClick;
+        fsekdok.MB_DokFK.OnClick := @AD_WystDokFK_OnClick;
+      end;
+    end;
+  end;
+end.

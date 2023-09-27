@@ -1,0 +1,828 @@
+{$ADDTYPE TFDokZakupDok}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TidAuthentication}
+{$ADDTYPE TidHttpResponse}
+{$ADDTYPE TidHttpRequest}
+{$ADDTYPE TIdHttp}
+{$ADDTYPE TWindowsPlugins}
+{$ADDUNIT stxsuperobject}
+{$AT TDotNetPrestiz}
+type
+  TPosDocument = record
+    documentId: longint;
+    originalId: longint;
+    orderNo: integer;
+    goodIndex: string;
+    goodId: longint;
+    name: string;
+    quantity: double;
+    netPrice: double;
+    grossPrice: double;
+    warehousePrice: double;
+    notes: string;
+  end;
+
+  TByteArr = array of byte;
+  TPosDocArr = array of TPosDocument;
+
+  TDocument = record
+    idExchangeDocument: longInt;
+    originalId: longint;
+    documentNumber: string;
+    documentDate: string;
+    saleDate: string;
+    documentTypeCode: string;
+    notes: string;
+    documentKind: longint;
+    effectiveDate: string;
+    customer_originalId: longint;
+    customer_shortName: string;
+    customer_fullName: string;
+    customer_tin: string;
+    positions: TPosDocArr;
+  end;
+
+
+  TDocumentSimple = record
+    idExchangeDocument: longint;
+    documentDate: string;
+    documentNumber: string;
+    idDocumentKind: integer;
+    idCustomer: longint;
+    amount: double;
+    items: integer;
+  end;
+
+var
+  mf : TFDokZakupDok;
+  form : TWindowPlugins;
+
+  sessionId : integer;
+
+  wsRequestEncoding : string;
+  wsResponseEncoding : string;
+  wsUrl : string;
+  wsUser : string;
+  wsPass : string;
+  tableEdiDokNagl : string;
+  tableEdiDok : string;
+  tableEdiDokPoz : string;
+  tableEdiKomunikatOUZ : string;
+  tableEdiPowiazOUZ : string;
+  generatorEdiDoc : string;
+  generatorEdiSesja : string;
+  procEdiDodajDokument : string;
+
+  sql : string;
+  err : integer;
+  i : integer;
+  JSONString : string;
+
+const
+  msgWSError = 'Brak komunikacji z Web Serwisem EDI';
+
+// INICJALIZACJA ZMIENNYCH GLOBALNYCH
+procedure initializeGlobals();
+begin
+  wsUrl := 'http://91.215.44.6/rest';
+  wsUser := 'format_pcb';
+  wsPass := 'fp123!';
+  tableEdiDokNagl := 'XXX_EDI_DOK_NAGL';
+  tableEdiDok := 'XXX_EDI_DOK';
+  tableEdiDokPoz := 'XXX_EDI_DOK_POZ';
+  tableEdiKomunikatOUZ := 'XXX_EDI_KOMUNIKAT_OUZ';
+  tableEdiPowiazOUZ := 'XXX_EDI_POWIAZ_OUZ';
+  generatorEdiDoc := 'GEN_XXX_EDI_DOK';
+  generatorEdiSesja := 'GEN_XXX_EDI_ID_SESJA';
+  procEdiDodajDokument := 'XXX_EDI_DODAJ_DOKUMENT';
+  wsRequestEncoding := 'utf-8';
+  wsResponseEncoding := 'utf-8';
+end;
+
+// METODY WEB SERVICE///////////////////////////////////////////////////////////
+function HTTP_pobierzDokumnety():String;
+  var
+   wHTTP: TIdHTTP;
+   arespCont  :TStream;
+   ms : TStringStream;
+  begin
+   wHTTP := TIdHTTP.Create(nil);
+   try
+    wHttp.Request.BasicAuthentication := True;
+    wHttp.Request.Username := wsUser;
+    wHttp.Request.password := wsPass;
+    wHttp.Request.ContentType := 'application/json';
+    wHttp.Request.CharSet := wsRequestEncoding;
+    wHttp.Request.Method := 'POST';
+    wHttp.Response.ContentType := 'application/json';
+    wHttp.Response.CharSet := wsResponseEncoding;
+
+    arespCont := TStringStream.Create('');
+    ms := TStringStream.Create('');
+
+    ms.WriteString('{"amount": 0,"documentDate": "","idCustomer": 0,"items": 0,"idExchangeDocument": 0,"documentNumber": "","idDocumentKind": 4}');
+
+    wHttp.Post3(wsUrl+'/getDocuments', TStream(ms) , arespCont);
+    result := TStringStream(arespCont).DataString;
+   finally
+    wHTTP.Free;
+   end;
+end;
+
+procedure bbZawiercie_konwertowanieXML(Sender: TObject);
+var
+  wDNRun: TDotNetPrestiz;
+  res : string;
+begin
+    wDNRun :=  TDotNetPrestiz.Create;
+    res := wDNRun.RunDotNetProgram('Zawiercie_konwertowanieXML', '','');
+
+  wDNRun.Free;
+
+end;
+
+function HTTP_pobierzSzczegolyDokumnetow(idExchangeDocList : string):String;
+  var
+   wHTTP: TIdHTTP;
+   arespCont  :TStream;
+   ms : TStringStream;
+  begin
+   wHTTP := TIdHTTP.Create(nil);
+   try
+    wHttp.Request.BasicAuthentication := True;
+    wHttp.Request.Username := wsUser;
+    wHttp.Request.password := wsPass;
+    wHttp.Request.ContentType := 'application/json';
+    wHttp.Request.CharSet := wsRequestEncoding;
+    wHttp.Request.Method := 'POST';
+    wHttp.Response.ContentType := 'application/json';
+    wHttp.Response.CharSet := wsResponseEncoding;
+
+    arespCont := TStringStream.Create('');
+    ms := TStringStream.Create('');
+
+    ms.WriteString('{"idDocumentKind": 0,"documentDate": "","items": [' + idExchangeDocList + ']}');
+
+    wHttp.Post3(wsUrl+'/getDocument', TStream(ms) , arespCont);
+    result := TStringStream(arespCont).DataString;
+   finally
+    wHTTP.Free;
+   end;
+end;
+
+function HTTP_zmienStatusDokumentu(json : string):String;
+  var
+   wHTTP: TIdHTTP;
+   arespCont  :TStream;
+   ms : TStringStream;
+  begin
+   wHTTP := TIdHTTP.Create(nil);
+   try
+    wHttp.Request.BasicAuthentication := True;
+    wHttp.Request.Username := wsUser;
+    wHttp.Request.password := wsPass;
+    wHttp.Request.ContentType := 'application/json';
+    wHttp.Request.CharSet := wsRequestEncoding;
+    wHttp.Request.Method := 'POST';
+    wHttp.Response.ContentType := 'application/json';
+    wHttp.Response.CharSet := wsResponseEncoding;
+
+    arespCont := TStringStream.Create('');
+    ms := TStringStream.Create('');
+
+    ms.WriteString('['+ json +']');
+
+    wHttp.Post3(wsUrl+'/setDocumentState', TStream(ms) , arespCont);
+    result := TStringStream(arespCont).DataString;
+   finally
+    wHTTP.Free;
+   end;
+end;
+////////////////////////////////////////////////////////////////////////////////
+
+function StrToByte(const Value: String): TByteArr;
+var
+    x : byte;
+begin
+    SetLength(Result, Length(Value));
+    for I := 0 to Length(Value) - 1 do
+        begin
+          x := ord(Value[I + 1]);
+          Result[I] :=  x;
+        end;
+end;
+
+function ByteToString(const Value: TByteArr): String;
+var
+S : String;
+ Letra: char;
+ begin
+ S := '';
+ for I := Length(Value)-1 Downto 0 do     begin
+ letra := Chr(Value[I]);
+ S := letra + S;
+ end;
+ Result := S;
+ end;
+
+function insertPolishCharsUTF8(inputStr : string) : string;
+var
+  procIndexList : TIntegerList;
+  pLetterCount : integer;
+  procCount : integer;
+  index : integer;
+  str : string;
+  hex : string;
+  hex2 : string;
+  xByte : TBytes;
+
+begin
+  procCount := 0;
+  procIndexList := TIntegerList.Create;
+  while AnsiPos('%', inputStr) > 0 do
+    begin
+      procIndexList.add(AnsiPos('%', inputStr));
+      inputStr := StringReplace(inputStr, '%', '', []);
+    end;
+
+  str := StrToUniUtf8(inputStr);
+  str := StringReplace(str, 'Ź', '%C5%BB', []);
+  while AnsiPos('%', str) > 0 do
+     begin
+       index := AnsiPos('%', str);
+       hex := Copy(str, index + 1, 2);
+       hex2 := hex;
+       if hex = 'B9' then hex2 := 'BB';    // obsluga 'Ż'
+       if hex = 'BB' then hex2 := 'B9';    // obsluga 'Ź'
+       if hex = '08' then hex2 := '87';    // obsluga 'ć'
+       SetLength(xByte, 1);
+       xByte[0] := HexToInt(hex2);
+       if(hex2 = '87') then str := StringReplace(str, '%' + hex + '7', ByteToString(xByte), [])
+       else  str := StringReplace(str, '%' + hex, ByteToString(xByte), []);
+       pLetterCount := pLetterCount + 1;
+     end;
+
+  for i := 0 to procIndexList.Count - 1 do
+    begin
+      Insert('%', str, procIndexList.GetValue(i + procCount));
+    end;
+
+  procIndexList.Free
+  result := str;
+  result := StringReplace(result, '"', '\"', [rfReplaceAll]);
+  result := StringReplace(result, #13#10, '\r\n', [rfReplaceAll]);
+end;
+
+function extractPolishCharsUTF8(inputStr : string) : string;
+var
+  byteArr : TByteArr;
+  strByteArr : string;
+  currChar : string;
+  currByte : TByteArr;
+  prevChar : string;
+  prevByte : TByteArr;
+  prev2Char : string;
+  prev2Byte : TByteArr;
+  j : integer;
+
+begin
+  for j:= 1 to Length(inputStr) do
+  begin
+    currChar := Copy(inputStr, j, 1);
+    byteArr := StrToByte(currChar);
+    strByteArr := '';
+    for i:= 0 to Length(byteArr)-1 do
+      begin
+        strByteArr := strByteArr + ' ' + IntToStr(byteArr[i]);
+      end;
+
+    currByte := StrToByte(currChar);
+    prevByte := StrToByte(prevChar);
+    prev2Byte := StrToByte(prev2Char);
+
+    if(Length(prevByte) > 0) then
+      begin
+        // ą
+        if(currByte[0] = 38) and (prevByte[0] = 196) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ą', []);
+        // ć
+        //if(Length(prev2Byte) > 0) then
+        //   if(currByte[0] = 55) and (prevByte[0] = 8) and (prev2Byte[0] = 196) then inputStr := StringReplace(inputStr, prev2Char + prevChar + currChar, 'ć', []);
+        if(currByte[0] = 33) and (prevByte[0] = 196) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ć', []);
+        // ę
+        if(currByte[0] = 34) and (prevByte[0] = 196) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ę', []);
+        // ł
+        if(currByte[0] = 26) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ł', []);
+        // ń
+        if(currByte[0] = 30) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ń', []);
+        // ó
+        if(currByte[0] = 66) and (prevByte[0] = 2) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ó', []);
+        // ś
+        if(currByte[0] = 58) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ś', []);
+        // ź
+        if(currByte[0] = 95) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ź', []);
+        // ż
+        if(currByte[0] = 61) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'ż', []);
+        // Ą
+        if(currByte[0] = 30) and (prevByte[0] = 196) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ą', []);
+        // Ć
+        if(currByte[0] = 32) and (prevByte[0] = 196) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ć', []);
+        // Ę
+        if(currByte[0] = 152) and (prevByte[0] = 196) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ę', []);
+        // Ł
+        if(currByte[0] = 129) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ł', []);
+        // Ń
+        if(currByte[0] = 131) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ń', []);
+        // Ó
+        if(currByte[0] = 28) and (prevByte[0] = 2) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ó', []);
+        // Ś
+        if(currByte[0] = 97) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ś', []);
+        // Ź
+        if(currByte[0] = 5) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ź', []);
+        // Ż
+        if(currByte[0] = 187) and (prevByte[0] = 57) then inputStr := StringReplace(inputStr, prevChar + currChar, 'Ż', []);
+
+      end;
+
+    prev2Char := prevChar;
+    prevChar := currChar;
+  end;
+
+  Result := inputStr;
+
+end;
+
+///////////////////////////////////////////////////////////////////////
+
+procedure clearTempTables();
+begin
+   sql := 'DELETE FROM ' + tableEdiDokNagl + ' WHERE sessionid = ' + IntToStr(sessionId);
+   err := ExecuteSQL(sql, 0);
+   if(err = 0) then inf300(GetLastAPIError);
+
+   sql := 'DELETE FROM ' + tableEdiDok + ' WHERE sessionid = ' + IntToStr(sessionId);
+   err := ExecuteSQL(sql, 0);
+   if(err = 0) then inf300(GetLastAPIError);
+
+   sql := 'DELETE FROM ' + tableEdiDokPoz + ' WHERE sessionid = ' + IntToStr(sessionId);
+   err := ExecuteSQL(sql, 0);
+   if(err = 0) then inf300(GetLastAPIError);
+
+   sql := 'DELETE FROM ' + tableEdiKomunikatOUZ + ' WHERE sessionid = ' + IntToStr(sessionId);
+   err := ExecuteSQL(sql, 0);
+   if(err = 0) then inf300(GetLastAPIError);
+
+end;
+
+
+/////////////////////////////////////////////////////////////
+// POBIERANIE
+////////////////////////////////////////////////////////////
+
+function getPosDocFromJSON(JSONString : string) : TPosDocument;
+var
+  x: TsuperObject;
+  recPos: TPosDocument;
+
+begin
+  x := TSuperObject.Create(JSONString, false);
+  try
+     recPos.originalId := x.GetInteger('originalId');
+     recPos.orderNo := x.GetInteger('orderNo');
+     recPos.goodIndex := x.GetString('goodIndex');
+     recPos.goodId := x.GetInteger('goodId');
+     recPos.name := x.GetString('name');
+     recPos.quantity := x.GetDouble('quantity');
+     recPos.netPrice := x.GetDouble('netPrice');
+     recPos.grossPrice := x.GetDouble('grossPrice');
+     recPos.warehousePrice := x.GetDouble('warehousePrice');
+     recPos.notes := x.GetString('notes');
+  finally
+    x.Free;
+  end;
+
+  Result := recPos;
+end;
+
+function getPositionsDocFromJSON(JSONString : string) : TPosDocArr;
+var
+  sep : string;
+  recStr : string;
+  temp : string;
+  count : integer;
+
+begin
+  count := 0;
+  temp := JSONString;
+  while(Pos('{', temp) > 0) do
+    begin
+      count := count + 1;
+      temp := StringReplace(temp, '{', '', []);
+    end;
+
+  SetLength(Result, count);
+
+  count := 0;
+  sep := '},';
+  while AnsiPos(sep,JSONString) > 0 do
+      begin
+        recStr := Copy(JSONString, AnsiPos('{', JSONString), AnsiPos(sep, JSONString));
+        JSONString := StringReplace(JSONString, recStr + ',', '', []);
+        Result[count] := getPosDocFromJSON(recStr);
+        count := count + 1;
+      end;
+    Result[count] := getPosDocFromJSON(JSONString);
+
+end;
+
+function getDocumentFromJSON(JSONString : string) : TDocument;
+var
+  x: TsuperObject;
+  custStr : string;
+  itemsStr : string;
+  xCust: TSuperObject;
+  rec: TDocument;
+begin
+  x := TSuperObject.Create(JSONString, false);
+  try
+     rec.idExchangeDocument := x.GetInteger('idExchangeDocument');
+     rec.originalId := x.GetInteger('originalId');
+     rec.documentNumber := x.GetString('documentNumber');
+     rec.documentDate := x.GetString('documentDate');
+     rec.saleDate := x.GetString('saleDate');
+     rec.documentTypeCode := x.GetString('documentTypeCode');
+     rec.notes := x.GetString('notes');
+     rec.documentKind := x.GetInteger('documentKind');
+     rec.effectiveDate := x.GetString('effectiveDate');
+
+     custStr := Copy(JSONString, AnsiPos('"customer":', JSONString) + 11, AnsiPos('}', JSONString) - AnsiPos('"customer":', JSONString) - 10);
+     xCust := TSuperObject.Create(custStr, false);
+     rec.customer_originalId := xCust.GetInteger('originalId');
+     rec.customer_shortName := xCust.GetString('shortName');
+     rec.customer_fullName := xCust.GetString('fullName');
+     rec.customer_tin := xCust.GetString('tin');
+
+     itemsStr := Copy(JSONString, AnsiPos('"items":', JSONString) + 9, AnsiPos(']}', JSONString) - AnsiPos('"items":', JSONString) - 9);
+     rec.positions := getPositionsDocFromJSON(itemsStr);
+  finally
+    x.Free;
+  end;
+
+  Result := rec;
+end;
+
+procedure insertDocIntoTempTable(rec : TDocument);
+var
+  idInDB : integer;
+  inDB : string;
+  documentDate : string;
+  saleDate : string;
+  effectiveDate : string;
+
+begin
+   //idInDB := nrDocExistInDB(rec.goodIndex);
+
+
+   inDB := '';
+   if(idInDB > 0) then inDB := 'TAK';
+
+   if Length(rec.documentDate) > 0 then documentDate := '''' + rec.documentDate + '''' else documentDate := 'null';
+   if Length(rec.saleDate) > 0 then saleDate := '''' + rec.saleDate + '''' else saleDate := 'null';
+   if Length(rec.effectiveDate) > 0 then effectiveDate := '''' + rec.effectiveDate + '''' else effectiveDate := 'null';
+
+   sql := 'INSERT INTO '+ tableEdiDokNagl +' (DOC_ORIGINALID, DOC_EXCHANGEID, DOCUMENTNUMBER, DOCUMENTDATE, SALEDATE, DOCUMENTTYPECODE, NOTES, DOCUMENTKIND, EFFECTIVEDATE, CUSTOMER_ORIGINALID, CUSTOMER_SHORTNAME, CUSTOMER_FULLNAME, CUSTOMER_TIN, ISINDB, SESSIONID) '
+      + ' VALUES ( ' + IntToStr(rec.originalId) + ',' + IntToStr(rec.idExchangeDocument) + ', ''' + rec.documentNumber + ''', ' + documentDate + ', ' + saleDate + ', '''
+      + rec.documentTypeCode + ''', ''' + rec.notes + ''', ''' + IntToStr(rec.documentKind) + ''', ' + effectiveDate + ', ' + IntToStr(rec.customer_originalId) + ', '''
+      + rec.customer_shortName + ''', ''' + rec.customer_fullName + ''', ''' + rec.customer_tin + ''', ''' + inDB + ''', ' + IntToStr(sessionId) + ')';
+
+   err := ExecuteSQL(sql, 0);
+   if(err = 0) then inf300(GetLastAPIError);
+
+   for i := 0 to Length(rec.positions)-1 do
+     begin
+       sql := 'INSERT INTO '+ tableEdiDokPoz +' (ORIGINALID, DOC_EXCHANGEID, ORDERNO, GOODINDEX, GOODID, NAME, QUANTITY, NETPRICE, GROSSPRICE, WAREHOUSEPRICE, NOTES, SESSIONID) '
+          + ' VALUES (' + IntToStr(rec.positions[i].originalId) + ', ' + IntToStr(rec.idExchangeDocument) + ', ' + IntToStr(rec.positions[i].orderNo) + ', '''
+          + rec.positions[i].goodIndex + ''', ' + IntToStr(rec.positions[i].goodId) + ', ''' + rec.positions[i].name + ''', '
+          + StringReplace(CurrToStr(rec.positions[i].quantity), ',', '.', []) + ', ' + StringReplace(CurrToStr(rec.positions[i].netPrice), ',', '.', []) + ', '
+          + StringReplace(CurrToStr(rec.positions[i].grossPrice), ',', '.', []) + ', '+ StringReplace(CurrToStr(rec.positions[i].wareHousePrice), ',', '.', []) + ', '''
+          + rec.positions[i].notes + ''', ' + IntToStr(sessionId) + ')';
+
+       err := ExecuteSQL(sql, 0);
+       if(err = 0) then inf300(GetLastAPIError);
+     end;
+end;
+
+function changeStatusDocOnEDI(idDocList : TIntegerList; state : Integer) : string;
+var
+  docJson : string;
+  wsResponse : string;
+  msg : string;
+  x : TSuperObject;
+
+begin
+
+  docJson := '';
+  for i := 0 to idDocList.count - 1 do
+    begin
+      if(i <> 0) then docJson := docJson + ',';
+      docJson := docJson + '{"idExchangeDocument": '+ IntToStr(idDocList.getValue(i)) +',"idDocumentState": '+ IntToStr(state) +'}';
+    end;
+
+  if(Length(docJson) > 0) then
+    begin
+      try
+        wsResponse := HTTP_zmienStatusDokumentu(docJson);
+      except
+        begin
+          Result := msgWSError;
+          exit;
+        end;
+      end;
+
+      if(Length(wsResponse) > 0) then
+        begin
+          x := TSuperObject.Create(wsResponse, false);
+          try
+            msg := x.getString('text');
+          finally
+            x.Free;
+          end
+          if(Length(msg) > 0) then Result := msg;
+        end
+      else Result := 'Brak odpowiedzi z Web Serwisu EDI';
+    end;
+end;
+
+procedure createOUZ;
+var
+  msg : string;
+  ds_message : TDataSource;
+  idDocList : TIntegerList;
+  errMsg : string;
+
+begin
+  sql := 'EXECUTE PROCEDURE ' + procEdiDodajDokument + ' (' + IntToStr(sessionId) + ', ' + IntToStr(mf.UserId) + ')';
+  err := ExecuteSQL(sql, 0);
+  if(err = 0) then inf300(GetLastAPIError);
+
+  sql := 'SELECT documentid, documentnumber, msg, id_urzzewnagl FROM ' + tableEdiKomunikatOUZ + ' WHERE sessionid = ' + IntToStr(sessionId);
+
+  ds_message := OpenQuerySQL(sql, 0);
+  idDocList := TIntegerList.Create;
+  if not(ds_message.DataSet.EOF) then
+    begin
+      msg := 'Statusy importu poszczególnych dokumentów:';
+      ds_message.DataSet.FIRST;
+         while not ds_message.Dataset.EOF do
+           begin
+             msg := msg + #13#10 + ds_message.DataSet.FIELDBYNAME('documentnumber').ASSTRING + ': ' + ds_message.DataSet.FIELDBYNAME('msg').ASSTRING
+             if(ds_message.DataSet.FIELDBYNAME('msg').ASSTRING = 'OK') then
+               begin
+                 idDocList.add(ds_message.DataSet.FIELDBYNAME('documentid').ASINTEGER);
+                 //sql := 'UPDATE ' + tableEdiDok + ' SET id_urzzewnagl = ' + ds_message.DataSet.FIELDBYNAME('id_urzzewnagl').ASSTRING + ' WHERE idExchangeDocument = ' + ds_message.DataSet.FIELDBYNAME('documentid').ASSTRING + ' AND sessionId = ' + IntToStr(sessionId);
+                 sql := 'INSERT INTO '+ tableEdiPowiazOUZ +' (ID_EDIDOK, ID_URZZEWNAGL) VALUES (' + ds_message.DataSet.FIELDBYNAME('documentid').ASSTRING + ', ' + ds_message.DataSet.FIELDBYNAME('id_urzzewnagl').ASSTRING + ')'
+                 err := ExecuteSQL(sql, 0);
+                 if(err = 0) then inf300(GetLastAPIError);
+               end;
+             ds_message.DataSet.NEXT;
+           end;
+    end;
+  ds_message.Free;
+
+  if(idDocList.count > 0) then
+    begin
+      errMsg := changeStatusDocOnEDI(idDocList, 7);
+      //errMsg := 'Test';
+      if(errMsg <> 'OK') then inf300(errMsg + '. Nie zmieniono statusów dla dokumentów po stronie EDI.');
+    end;
+
+  idDocList.Free;
+  if(Length(msg) > 0) then inf300(msg);
+end;
+
+procedure insertDocument(idSelectedDocsStr : string);
+var
+  recStr : string;
+  rec : TDocument;
+  x : TSuperObject;
+  msg : string;
+
+begin
+  try
+    JSONString := HTTP_pobierzSzczegolyDokumnetow(idSelectedDocsStr);
+  except
+    begin
+      inf300(msgWSError);
+      exit;
+    end;
+  end;
+
+  if(Length(JSONString) > 0) then
+    begin
+      x := TSuperObject.Create(JSONString, false);
+      try
+        msg := x.getString('text');
+      finally
+        x.Free;
+      end;
+
+    if(msg = 'OK') then
+      begin
+        JSONString := Copy(JSONString, AnsiPos('[', JSONString) + 1, AnsiPos('}]}]', JSONString) + 1);
+        while AnsiPos('}]},',JSONString) > 0 do
+          begin
+            recStr := Copy(JSONString, AnsiPos('{', JSONString), AnsiPos('}]},', JSONString)+2);
+            JSONString := StringReplace(JSONString, recStr + ',', '', []);
+            rec := getDocumentFromJSON(recStr);
+            insertDocIntoTempTable(rec);
+          end;
+            if(Length(JSONString) > 1) then
+              begin
+                rec := getDocumentFromJSON(JSONString);
+                insertDocIntoTempTable(rec);
+                createOUZ();
+              end
+       end
+    else
+      inf300(msg);
+  end;
+end;
+
+function getSimpleDocFromJSON(JSONString : string) : TDocumentSimple;
+var
+  x: TsuperObject;
+  custStr : string;
+  xCust: TSuperObject;
+  rec: TDocumentSimple;
+begin
+  x := TSuperObject.Create(JSONString, false);
+  try
+     rec.idExchangeDocument := x.GetInteger('idExchangeDocument');
+     rec.documentDate := x.GetString('documentDate');
+     rec.documentNumber := x.GetString('documentNumber');
+     rec.idDocumentKind := x.GetInteger('idDocumentKind');
+     rec.idCustomer := x.GetInteger('idCustomer');
+     rec.amount := x.GetDouble('amount');
+     rec.items := x.GetInteger('items');
+  finally
+    x.Free;
+  end;
+
+  Result := rec;
+end;
+
+procedure insertSimpleDocIntoTempTable(rec : TDocumentSimple);
+var
+  idInDB : integer;
+  inDB : string;
+  documentKind : string;
+begin
+   //idInDB := nrDocExistInDB(rec.goodIndex);
+   inDB := '';
+   if(idInDB > 0) then inDB := 'TAK';
+
+   case rec.idDocumentKind of
+     1: documentKind := 'ZAMDOS';
+     2: documentKind := 'ZAMODB';
+     3: documentKind := 'FAS';
+     4: documentKind := 'FAZ';
+   end;
+
+   sql := 'INSERT INTO '+ tableEdiDok +' (IDEXCHANGEDOCUMENT, DOCUMENTDATE, DOCUMENTNUMBER, DOCUMENTKIND, IDCUSTOMER, AMOUNT, ITEMS, SESSIONID) '
+      + ' VALUES ( ' + IntToStr(rec.idExchangeDocument) + ', ''' + rec.documentDate + ''', ''' + rec.documentNumber + ''', '''
+      + documentKind + ''', ' + IntToStr(rec.idCustomer) + ', ' + StringReplace(CurrToStr(rec.amount), ',', '.', []) + ', ' + IntToStr(rec.items) + ','
+      + IntToStr(sessionId) + ')';
+
+   err := ExecuteSQL(sql, 0);
+   if(err = 0) then inf300(GetLastAPIError);
+end;
+
+procedure showKartList();
+var
+   idSelectedDocsStr : string;
+//   posTab : TTabSheetPlugins;
+
+begin
+   form := TWindowPlugins.Create(22);
+   form.Caption := 'Lista dokumentów pobranych z centralnej bazy';
+   form.IdColumns := 'IDEXCHANGEDOCUMENT';
+   form.SqlSet('x.IDEXCHANGEDOCUMENT, x.DOCUMENTDATE, x.DOCUMENTNUMBER, x.DOCUMENTKIND, x.IDCUSTOMER, x.AMOUNT, x.ITEMS',
+   tableEdiDok + ' x', 'x.SESSIONID = ' + IntToStr(sessionId), '', '', '');
+
+   form.AddFieldsXXX(tableEdiDok, 'IDEXCHANGEDOCUMENT', 'Id', 'x');
+   form.AddFieldsXXX(tableEdiDok, 'DOCUMENTDATE', 'Data dokumentu', 'x');
+   form.AddFieldsXXX(tableEdiDok, 'DOCUMENTNUMBER', 'Numer dokumentu', 'x');
+   form.AddFieldsXXX(tableEdiDok, 'DOCUMENTKIND', 'Rodzaj dokumentu', 'x');
+   form.AddFieldsXXX(tableEdiDok, 'IDCUSTOMER', 'Id kontrahenta', 'x');
+   form.AddFieldsXXX(tableEdiDok, 'AMOUNT', 'Suma', 'x');
+   form.AddFieldsXXX(tableEdiDok, 'ITEMS', 'Liczba pozycji', 'x');
+
+   //form.EditAction(F5, @editRecord);
+
+   form.ShowWindowCheckStr(idSelectedDocsStr);
+
+   if Length(idSelectedDocsStr) > 0 then
+     insertDocument(idSelectedDocsStr);
+end;
+
+procedure getData(Sender : TObject);
+var
+  recStr : string;
+  rec : TDocumentSimple;
+  x : TSuperObject;
+  msg : string;
+
+begin
+
+  try
+    JSONString := HTTP_pobierzDokumnety();
+  except
+    begin
+      inf300(msgWSError);
+      exit;
+    end;
+  end;
+
+
+  //JSONString := '{"result":true,"id":null,"text":"OK","list":[{"idExchangeDocument":14,"documentDate":"2013-11-18","documentNumber":"1728/ODL/2013","idDocumentKind":2,"idCustomer":117501,"amount":1252.2000,"items":4},{"idExchangeDocument":15,"documentDate":"2013-11-19","documentNumber":"1729/ODL/2013","idDocumentKind":2,"idCustomer":117502,"amount":252.2000,"items":5}]}';
+  //JSONString := '{"result":true,"id":null,"text":"OK","list":[{"idExchangeDocument":25,"documentDate":"2016-01-26","documentNumber":"ZAMDOS/2/01/01/2016","idDocumentKind":1,"idCustomer":11736,"amount":999.0000,"items":1}]}';
+
+  if(Length(JSONString) > 0) then
+    begin
+      x := TSuperObject.Create(JSONString, false);
+    try
+      msg := x.getString('text');
+    finally
+      x.Free;
+    end;
+
+    if(msg = 'OK') then
+      begin
+        sessionId := StrToInt(GetFromQuerySQL('SELECT GEN_ID(' + generatorEdiSesja + ', 1) FROM RDB$DATABASE', 0));
+        JSONString := Copy(JSONString, AnsiPos('[', JSONString) + 1, AnsiPos('}]}', JSONString) + 1);
+        while AnsiPos('},', JSONString) > 0 do
+          begin
+            recStr := Copy(JSONString, AnsiPos('{', JSONString), AnsiPos('},', JSONString));
+            JSONString := StringReplace(JSONString, recStr + ',', '', []);
+            rec := getSimpleDocFromJSON(recStr);
+            insertSimpleDocIntoTempTable(rec);
+          end;
+        if(Length(JSONString) > 1) then
+          begin
+            rec := getSimpleDocFromJSON(JSONString);
+            insertSimpleDocIntoTempTable(rec);
+            showKartList();
+          end
+            else
+              inf300('Brak dokumentów');
+      end
+    else
+      inf300(msg);
+  end;
+
+  clearTempTables();
+end;
+
+
+procedure AD_PrzyjmijZEDI_OnExecute(Sender: TObject);
+var
+  Sql : string;
+  idNaglPrzed : integer;
+  idNaglPo :integer;
+begin
+
+     Sql:=' select max(N.ID_NAGL)'
+         +' from NAGL N'
+         +' inner join DEFDOK DD on (N.ID_DEFDOK = DD.ID_DEFDOK)'
+         +' inner join RODZAJDOK RD on (DD.ID_RODZAJDOK = RD.ID_RODZAJDOK)'
+         +' where (RD.ID_GRUPADOK = 20)';
+
+    IdNaglPrzed:= StrToIntDef(Trim(GetFromQuerySQL(Sql, 0)), -1);
+
+
+    mf.AD_PrzyjmijZEDIExecute(Sender)
+
+    idNaglPo:= StrToIntDef(Trim(GetFromQuerySQL(Sql, 0)), -1);
+
+    if(IdNaglPrzed <> idNaglPo)
+    then
+    begin
+       mf.QueryMain.Locate_('ID_Nagl', idNaglPo,[] );
+    end
+
+end;
+
+///////////////////////////////////////////////////////////
+begin
+
+  if not (self is TFDokZakupDok) then exit;
+      mf := TFDokZakupDok(self);
+
+      mf.AD_PrzyjmijZEDI.OnExecute:=  @AD_PrzyjmijZEDI_OnExecute;
+
+
+  //initializeGlobals;
+
+ // PluginsAddAction(self, 'Pobierz dokumenty z EDI', '\\debian\dane\EDI - ikony\import_icon1.bmp', @getData);
+
+  PluginsAddAction(Self, 'Konwertuj XML', 'Attach', @bbZawiercie_konwertowanieXML);
+end.

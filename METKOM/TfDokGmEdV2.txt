@@ -1,0 +1,124 @@
+var
+  frm : TfDokGmEdV2;
+  BBDodajPozycjeWieleMag:TstBitBtn;
+
+procedure bbDodajPozycjeDoMagazynow(Sender: TObject);
+
+var
+  wDNRun: TDotNetPrestiz;
+  wDanePoz : TDanePozImport;
+  wListaPoz : TListDanePoz;
+  ID_SESSION: string;
+  warehouseDebica: string;
+  warehouseTranzyt: string;
+  warehouseRadom: string;
+  warehouseDabrowaGornicza: string;
+  vSql: string;
+  vDS: TDataSource;
+  res: string;
+  i: Integer;
+  cenaN: currency;
+  cenaB: currency;
+begin
+
+    vSql:='SELECT GEN_ID(XXX_ID_SESJI, 1) FROM RDB$DATABASE';
+    ID_SESSION:= GetFromQuerySQL(vSql,0);
+    warehouseDebica:='10004';
+    warehouseTranzyt:= '10112';
+    warehouseRadom:= '10111'
+    warehouseDabrowaGornicza:='10176';
+    wDNRun :=  TDotNetPrestiz.Create;
+    res := wDNRun.RunDotNetProgram('Metkom_DodajPozycjeDoZamowienia',ID_SESSION+'|'+warehouseDebica+'|'+warehouseTranzyt+'|'+warehouseRadom+'|'+warehouseDabrowaGornicza,'');
+    wDNRun.Free;
+
+
+
+ wListaPoz := TListDanePoz.MCreate;
+  try
+
+
+    VSql:=  'select x.ID_KARTOTEKA, x.ILOSC, x.ID_MAGAZYN, c.CENAN,c.CENAB'
+              +' from XXX_DODAJPOZDOMAGAZ x'
+              +' join cennik c on c.id_kartoteka=x.id_kartoteka'
+              +' where x.id_sesji = '+ ID_SESSION +' and c.id_defceny =10001';
+
+
+    vDS := OpenQuerySQL(vSql, 0);
+    if(vds=nil) then exit;
+    try
+      vDS.DataSet.First;
+      while not vDS.DataSet.Eof do
+      begin
+        wDanePoz := TDanePozImport.Create;
+        wDanePoz.Id_Kartoteka := vDS.DataSet.FieldByName('ID_KARTOTEKA').AsInteger;
+        wDanePoz.Ilosc := vDS.DataSet.FieldByName('ILOSC').AsCurrency;
+        wDanePoz.Id_ZadMagazyn := vDS.DataSet.FieldByName('id_magazyn').AsInteger;
+        wDanePoz.WymusCeneIBonifPrzyDod := True;
+        WDanePoz.CenaNetto:= vDS.DataSet.FieldByName('CENAN').ASCURRENCY;
+        WDanePoz.CenaBrutto:= vDS.DataSet.FieldByName('CENAB').ASCURRENCY;
+        wListaPoz.AddDanePozImport(wDanePoz);
+        vDS.DataSet.Next;
+      end;
+    finally
+      CloseQuerySQL(vDS);
+    end;
+
+      if (wListaPoz.Count > 0) then
+    begin
+      if fDokGmEd.DodajPozPlugin(wListaPoz) then
+      begin
+        for i := 0 to wListaPoz.Count - 1 do
+        begin
+          vSql := 'update poz'
+               + ' set przelacznik1 = bin_xor(przelacznik1, 8)'
+               + ' where id_poz = ' + IntToStr(wListaPoz.GetDanePoz(i).Id_Poz);
+
+
+
+          ExecuteSQL(vSql, 0);
+        end;
+      end;
+    end;
+  finally
+    wListaPoz.Free;
+  end;
+
+
+
+  TstQuery(fDokGmEd.DBG_PozDok.DataSource.DataSet).stClose('');
+  TstQuery(fDokGmEd.DBG_PozDok.DataSource.DataSet).stOpen('');
+end;
+
+
+
+
+
+
+
+procedure DodajPozycje;
+begin
+ if (BBDodajPozycjeWieleMag = nil) then
+ begin
+
+      BBDodajPozycjeWieleMag:=TstBitBtn.Create(Self);
+      BBDodajPozycjeWieleMag.Name := 'Platnosc';
+      BBDodajPozycjeWieleMag.SetBounds(430, 18, 32, 32)
+      BBDodajPozycjeWieleMag.Caption := '';
+      BBDodajPozycjeWieleMag.RepoName := 'money_bag_24';
+      BBDodajPozycjeWieleMag.parent:=  fDokGmEd.P_Srodek;
+      BBDodajPozycjeWieleMag.OnClick := @bbDodajPozycjeDoMagazynow;
+ end;
+end;
+
+
+begin
+  if (Self is TfDokGmEdV2) then
+  begin
+    if (fDokGmEd = nil) then
+    begin
+      fDokGmEd := TfDokGmEdV2(Self); 
+
+       DodajPozycje;
+	   end;
+	end;
+end.	

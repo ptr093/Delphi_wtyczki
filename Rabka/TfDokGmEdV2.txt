@@ -1,0 +1,107 @@
+//TfDokGmEdV2
+{$ADDTYPE TstBitBtn}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TQNAGL}
+{$ADDTYPE TobrDokGMPalec}
+{$ADDTYPE TfDokGmEdV2}
+{$AT TDotNetPrestiz}
+
+var
+  frm: TfDokGmEdV2;
+  obrDokGMPalec: TobrDokGMPalec;
+   BBAktualizacjaNazwyKartotekiM:TstBitBtn;
+const
+  cIdDefDok = 444;
+
+function OdpowiednieDokumentyPZNiezrealizowaneZDD: Boolean;
+var
+  vSql: string;
+begin
+  vSql := 'select count(n.id_nagl)'
+       + ' from nagl n'
+       + ' join defdok dd on n.id_defdok = dd.id_defdok'
+       + ' where n.id_nagl = ' + IntToStr(frm.PluginID_Nagl)
+       + ' and dd.id_rodzajdok in (485,483,486,2130)'; //Przychód zewnętrzny PZ
+
+  Result := (StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), 0) > 0);
+end;
+
+function SprawdzKontrahKomunikatNiezrealizowaneZDD: Boolean;
+var
+  vSql: string;
+begin
+  vSql := 'select count(distinct n.id_nagl)'
+       + ' from nagl n'
+       + ' join defdok dd on n.id_defdok = dd.id_defdok'
+       + ' where n.niezamknietodok = 0'
+       + ' and n.bazanagl = 0'
+       + ' and n.status = 0'
+       + ' and n.id_grupadok = 70' //Zamówienia do dostawców
+       + ' and n.id_kontrah = ' + IntToStr(obrDokGMPalec.QNagl.ID_KONTRAH.AsInteger)
+       + ' and dd.id_rodzajdok <> 901';
+
+  Result := (StrToInt(Trim(GetFromQuerySQL(vSql, 0))) > 0);
+  if Result then
+    Inf('Kontrahent posiada niezrealizowane zamówienia do dostawców.', 100);
+end;
+
+procedure bbAktualizacjaNazwyKartoteki(Sender: TObject);
+var
+  wDNRun: TDotNetPrestiz;
+  res : string;
+begin
+    wDNRun :=  TDotNetPrestiz.Create;
+    res := wDNRun.RunDotNetProgram('AktualizacjaKartoteki', IntToStr(frm.IdPozycjiAkt),'');
+
+  wDNRun.Free;
+
+  frm.DBG_PozDok.DataSource.DataSet.Refresh;
+end;
+
+procedure AktualizujNazweKartoteki;
+begin
+ if (BBAktualizacjaNazwyKartotekiM = nil) then
+ begin
+
+      BBAktualizacjaNazwyKartotekiM:=TstBitBtn.Create(Self);
+      BBAktualizacjaNazwyKartotekiM.Name := 'Aktualizacja nazwy kartoteki';
+      BBAktualizacjaNazwyKartotekiM.SetBounds(430, 18, 32, 32)
+      BBAktualizacjaNazwyKartotekiM.Width := 40;
+      BBAktualizacjaNazwyKartotekiM.Caption := '';
+      BBAktualizacjaNazwyKartotekiM.RepoName := 'Change';
+      BBAktualizacjaNazwyKartotekiM.parent:=  frm.P_Srodek;
+      BBAktualizacjaNazwyKartotekiM.OnClick := @bbAktualizacjaNazwyKartoteki;
+ end;
+end;
+
+begin
+  if (Self is TfDokGmEdV2) then
+  begin
+    if (frm = nil) then
+    begin
+      frm := TfDokGmEdV2(Self);
+      obrDokGMPalec := TobrDokGMPalec(frm.FObrDokGm);
+    end;
+
+    if (frm.KlFun = F3) then
+      if OdpowiednieDokumentyPZNiezrealizowaneZDD then
+        if SprawdzKontrahKomunikatNiezrealizowaneZDD then
+          frm.AD_RealizujZamExecute(nil);
+
+    if frm <> nil then
+    begin
+      SetGlobalData('ID_DEFDOK_RABAT', frm.FPluginID_DefDok);
+      SetGlobalData('ID_NAGL_RABAT', frm.FPluginID_Nagl);
+
+      if (frm.FPluginID_DefDok = cIdDefDok) then
+      begin
+        SetGlobalData('ZAM_KRAJ', 1);
+      end
+      else
+        SetGlobalData('ZAM_KRAJ', 0);
+
+      if (frm.PluginID_RodzajDok = 185) then
+        AktualizujNazweKartoteki()
+    end;
+  end;
+end.

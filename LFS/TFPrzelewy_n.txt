@@ -1,0 +1,54 @@
+{$ADDTYPE TfPrzelewy_n}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TstPopupMenu}
+{$ADDTYPE TKrDBGrid}
+//dodane moje
+{$AT TDotNetPrestiz}
+
+var
+  mf : TfPrzelewy_n;
+
+procedure UruchomProcedure(idNagl: string);
+var
+   sSql: string;
+begin
+   sSql := 'delete from  przelewy p where p.id_przelewy= '+idNagl;
+    ExecuteSQL(sSql, 0);
+end;
+
+
+ procedure UsunPrzelewy(seder : TObject);
+var
+  IdPrzelew: string;
+  i: integer;
+  vLista: string;
+  vIdPrzelewu: string;
+  vListaIdPrzelew: TStringList;
+begin
+  //przygotowanie vListaIdPrzelew z id_przelewy zaznaczonych pozycji
+  vIdPrzelewu := inttostr(mf.QueryMain.FieldByName('ID_PRZELEWY').AsInteger);
+
+  if (mf.QueryMain.MarkCount > 0) then
+    vLista := mf.QueryMain.GetMarkedRows
+  else
+  vLista := '(' + vIdPrzelewu + ')';
+  vLista := Trim(Copy(vLista, 2, Length(vLista) - 2));
+  Zastap(',', #13 + #10, vLista);
+  vListaIdPrzelew := TStringList.Create;
+  vListaIdPrzelew.Text := vLista;
+  for i := 0 to vListaIdPrzelew.Count - 1 do
+  begin
+    IdPrzelew := vListaIdPrzelew[i];
+     UruchomProcedure(IdPrzelew);
+  end;
+  mf.QueryMain.Refresh;
+end;
+
+
+begin
+
+  if not (self is TfPrzelewy_n) then exit;
+      mf := TfPrzelewy_n(self);
+
+  PluginsAddAction(Self, 'Usuń wybrane przelewy', 'Attach', @UsunPrzelewy);
+end.

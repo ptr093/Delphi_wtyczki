@@ -1,0 +1,564 @@
+//ZamOdOdb_Wystaw_ZamWew
+{$ADDTYPE TFIBDatabase}
+{$ADDTYPE TFIBTransaction}
+{$ADDTYPE TstTransaction}
+{$ADDTYPE TSelectFromListType}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TKrDBGrid}
+{$ADDTYPE TfPostepOp}
+{$ADDTYPE TfWindowPlugins}
+{$ADDTYPE TWindowPlugins}
+
+var
+  ListaIdNagl: string;
+  IdUzytkownik: Integer;
+  IdProcesu: Integer;
+  Transaction: TstTransaction;
+  wpPozycje: TWindowPlugins;
+
+const
+  cIdMagazyn_Domyslny = 10070;//do ustawienia;
+
+const
+  cPrefiksNrDok_ZamOdOdb_ZamWew = 'ZOOZW/';
+  cGenerator_ZamOdOdb_ZamWew = 'XXX_GEN_ZOO_ZW';
+
+const
+  cIdWindowPlugins_Pozycje = 12664332;
+
+function PobIdUzytk: Boolean;
+begin
+  Result := True;
+  IdUzytkownik := StrToIntDef(Trim(GetFromQuerySQL('SELECT ID_UZYTKOWNIK FROM uzytkownik WHERE login = ' + QuotedStr(GetUser), 1)), 0);
+  if (IdUzytkownik = 0) then
+  begin
+    Result := False;
+    Inf('Błąd przy określaniu użytkownika.', 100);
+  end;
+end;
+
+procedure wpPozycjeMagazynOnClick(Sender: TObject);
+var
+  vIdPoz: Integer;
+  vListaIdPoz: string;
+  vIdMagazyn: Integer;
+  vSql: string;
+begin
+  if wpPozycje.fWindowsPlugins.QueryMain.FieldByName('id_poz').IsNull then Exit;
+
+  if (wpPozycje.fWindowsPlugins.QueryMain.MarkVisibleCount > 2000) then
+  begin
+    Inf('Zaznaczono za dużo pozycji.', 100);
+    Exit;
+  end;
+
+  vIdPoz := wpPozycje.fWindowsPlugins.QueryMain.FieldByName('id_poz').AsInteger;
+
+  if (wpPozycje.fWindowsPlugins.QueryMain.MarkVisibleCount > 0) then
+    vListaIdPoz := wpPozycje.fWindowsPlugins.QueryMain.GetMarkedRowsasString(sftMarked, 'id_poz')
+  else
+    vListaIdPoz := IntToStr(vIdPoz);
+
+  vIdMagazyn := Slownik('MAGAZYN');
+  if not (vIdMagazyn > 0) then Exit;
+
+  vSql := 'execute block'
+       + ' as'
+       + ' declare id_poz integer;'
+       + ' begin'
+       + '   for'
+       + '   select p.id_poz'
+       + '   from poz p'
+       + '   where p.id_poz in (' + vListaIdPoz + ')'
+       + '   into :id_poz'
+       + '   do'
+       + '     update or insert into xxx_zoo_poz_do_zw (id, id_poz, id_magazyn)'
+       + '     values (' + IntToStr(IdProcesu) + ', :id_poz, ' + IntToStr(vIdMagazyn) + ')'
+       + '     matching (id, id_poz);'
+       + ' end';
+  try
+    Transaction.WykonajSQL(vSql);
+  except
+    //Blad;
+    Exit;
+  end;
+
+  wpPozycje.Refresh;
+end;
+
+procedure wpPozycjeWyczyscOnClick(Sender: TObject);
+var
+  vSql: string;
+begin
+  if wpPozycje.fWindowsPlugins.QueryMain.FieldByName('id_poz').IsNull then Exit;
+
+  if not PytTN('Czy usunąć wprowadzone zmiany ?', 100) then Exit;
+
+  vSql := 'delete from xxx_zoo_poz_do_zw'
+       + ' where id = ' + IntToStr(IdProcesu);
+  try
+    Transaction.WykonajSQL(vSql);
+  except
+    //Blad;
+    Exit;
+  end;
+
+  wpPozycje.Refresh;
+end;
+
+procedure wpPozycje_OnCloseQuery(Sender: TObject; var CanClose: Boolean);
+begin
+  CanClose := PytTN('Czy zamknąć okno ?', 100);
+end;
+
+procedure AZ_ZamknijWybierzOnExecute(Sender: TObject);
+var
+  vListaIdPoz: string;
+  vField: TField;
+  vListaMag: string;
+begin
+  if (wpPozycje.fWindowsPlugins.QueryMain.MarkVisibleCount = 0) then
+  begin
+    Inf('Nie wybrano pozycji.', 100);
+    Exit;
+  end;
+
+  vListaIdPoz := wpPozycje.fWindowsPlugins.QueryMain.GetMarkedRowsasString(sftMarked, 'id_poz');
+
+  vField := Transaction.PodajzQuery('count(p.id_poz)',
+    'poz p'
+    + ' left join xxx_zoo_poz_do_zw xpoz on p.id_poz = xpoz.id_poz and xpoz.id = ' + IntToStr(IdProcesu),
+    'p.id_poz in (' + vListaIdPoz + ')'
+    + ' and coalesce(xpoz.id_magazyn, 0) = 0',
+    '', '', '', '', '', '');
+
+  if (vField.AsInteger > 0) then
+  begin
+    Inf('Nie wszystkie wybrane pozycje mają ustawiony magazyn do wystawienia.', 100);
+    Exit;
+  end;
+
+  vField := Transaction.PodajzQuery('list(m.nazwamag, ascii_char(13) || ascii_char(10))',
+    'poz p'
+    + ' left join xxx_zoo_poz_do_zw xpoz on p.id_poz = xpoz.id_poz and xpoz.id = ' + IntToStr(IdProcesu)
+    + ' left join magazyn m on xpoz.id_magazyn = m.id_magazyn'
+    + ' left join xxx_zoo_zw_urzzew xuz on xpoz.id_magazyn = xuz.id_magazyn',
+    'p.id_poz in (' + vListaIdPoz + ')'
+    + ' and coalesce(xuz.id_urzzew, 0) = 0',
+    '', '', '', '', '', '');
+
+  vListaMag := Trim(vField.AsString);
+  if (vListaMag <> '') then
+  begin
+    Inf('Nie wszystkie wybrane magazyny mają przypisane urządzenie zewnętrzne:' + #13 + #10 + vListaMag, 100);
+    Exit;
+  end;
+
+  wpPozycje.fWindowsPlugins.AZ_ZamknijWybierzExecute(Sender);
+end;
+
+function WystawNaglDokZamWew(const AIdMagazyn: string; const AIdUrzZew: Integer): Integer;
+var
+  vSql: string;
+  vNrUzytk: string;
+  vIdUrzZewNagl: string;
+  vUwagi: string;
+begin
+  Result := -1;
+
+  vSql := 'delete from urzzewnagl'
+       + ' where zrealziowany = 0'
+       + ' and id_urzzew = ' + IntToStr(AIdUrzZew);
+
+  if (ExecuteSQL(vSql, 0) <> 1) then
+  begin
+    Inf('Błąd przy usuwaniu niezrealizowanych dokumentów z urządzenia zewnętrznego dla magazynu: ' + AIdMagazyn, 100);
+    Exit;
+  end;
+
+  vSql := 'select U.oznnrwydruzyt FROM UZYTKOWNIK U WHERE U.id_uzytkownik = ' + IntToStr(IdUzytkownik);
+  vNrUzytk := Trim(GetFromQuerySQL(vSql, 0));
+
+  vUwagi := GetUser + '_' + DateTimeToStr(Now);
+
+  vSql := 'execute procedure URZZEWNAGL_ADD('
+        + '1, '
+        + '(select kodurz from urzzew where id_urzzew = ' + IntToStr(AIdUrzZew) + '), '
+        + QuotedStr(vNrUzytk) + ', '
+        + 'null, null, null, 2, '
+        + 'current_date, ' + QuotedStr('ZAWEW') + ', '
+        + QuotedStr(cPrefiksNrDok_ZamOdOdb_ZamWew) + '||GEN_ID(' + cGenerator_ZamOdOdb_ZamWew + ', 1), '
+        + 'null, null, null, '
+        + '0, '
+        + 'null, null, null, null, ' + QuotedStr(vUwagi) + ')';
+
+  if (ExecuteSQL(vSql, 0) = 1) then
+  begin
+    vSql := 'select max(u.id_urzzewnagl) from urzzewnagl u where u.odb_uwagi = ' + QuotedStr(vUwagi);
+
+    vIdUrzZewNagl := Trim(GetFromQuerySQL(vSql, 0));
+    if (vIdUrzZewNagl = '') then
+    begin
+      Inf('Nie pobrano nowo utworzonego nagłówka dla magazynu: ' + AIdMagazyn, 100);
+      Exit;
+    end;
+
+    vSql := 'update urzzewnagl'
+         + ' set odb_uwagi = null'
+         + ', jestuwaga = 0'
+         + ' where id_urzzewnagl = ' + vIdUrzZewNagl;
+
+    if (ExecuteSQL(vSql, 0) <> 1) then
+    begin
+      Inf('Błąd przy aktualizacji uwag dokumentu dla magazynu: ' + AIdMagazyn, 100);
+      Exit;
+    end;
+  end else
+  begin
+    Inf('Nie utworzono nagłówka urządzenia zewnętrznego dla magazynu: ' + AIdMagazyn, 100);
+    Exit;
+  end;
+
+  Result := StrToInt(vIdUrzZewNagl);
+end;
+
+procedure WystawDokumenty(const AListaIdPoz: string);
+var
+  vIdMagazyn: string;
+  vIdUrzZewNagl: Integer;
+  vIdUrzZew: Integer;
+  vIdNagl: string;
+  vQuery: TstQuery;
+  vDataSource: TDataSource;
+  vSql: string;
+begin
+  vIdMagazyn := '';
+  vIdUrzZewNagl := -1;
+
+  vQuery := TstQuery.Create(Self);
+  try
+    vQuery.Database := Transaction.DefaultDatabase;
+    vQuery.Transaction := TFIBTransaction(Transaction);
+
+    vQuery.SqlSelect := 'p.id_poz, p.id_kartoteka, p.ilosc - coalesce(pzw.ilzrealizzam, 0) as ilosc, k.indeks, xpoz.id_magazyn';
+    vQuery.SqlFrom := 'poz p'
+                   + ' join kartoteka k on p.id_kartoteka = k.id_kartoteka'
+                   + ' left join pozzamwsp pzw on p.id_poz = pzw.id_poz'
+                   + ' left join xxx_zoo_poz_do_zw xpoz on p.id_poz = xpoz.id_poz and xpoz.id = ' + IntToStr(IdProcesu);
+    vQuery.SqlWhereProg := 'p.id_poz in (' + AListaIdPoz + ')'
+                        + ' and coalesce(xpoz.id_magazyn, 0) > 0';
+    vQuery.SqlOrderBy := 'xpoz.id_magazyn, p.id_kartoteka';
+    vQuery.SqlOrderType := 'asc';
+
+    vQuery.stPrepare('');
+    vQuery.stOpen('');
+
+    vDataSource := TDataSource.Create(Self);
+    try
+      vDataSource.DataSet := TDataSet(vQuery);
+      vDataSource.DataSet.First;
+      while not vDataSource.DataSet.Eof do
+      begin
+        if (vIdMagazyn <> vDataSource.DataSet.FieldByName('id_magazyn').AsString) then
+        begin
+          if (vIdUrzZewNagl > 0) then
+          begin
+            vSql := 'update urzzewnagl set odb_ilepoz = (select count(id_urzzewpoz) from urzzewpoz where id_urzzewnagl = ' + IntToStr(vIdUrzZewNagl) + '),'
+              + ' odb_suma = (select sum(odb_ilosc * odb_cena) from urzzewpoz where id_urzzewnagl = ' + IntToStr(vIdUrzZewNagl) + ')'
+              + ' where id_urzzewnagl = ' + IntToStr(vIdUrzZewNagl);
+
+            if (ExecuteSQL(vSql, 0) <> 1) then
+            begin
+              Inf('Błąd przy aktualizacji nagłówka urządzenia zewnętrznego:' + #13 + #10
+                + 'Magazyn: ' + IntToStr(vIdMagazyn)
+                + ', IdUrzZewNagl: ' + IntToStr(vIdUrzZewNagl), 100);
+              Exit;
+            end;
+
+            RealizujDokumentyOUZ(vIdUrzZew, vIdUrzZewNagl);
+
+            vSql := 'select u.id_nagl from urzzewnagl u where u.id_urzzewnagl = ' + IntToStr(vIdUrzZewNagl);
+
+            vIdNagl := Trim(GetFromQuerySQL(vSql, 0));
+            if (vIdNagl = '') then
+            begin
+              Inf('Nieokreślony dokument:' + #13 + #10
+                + 'Magazyn: ' + IntToStr(vIdMagazyn)
+                + ', IdUrzZewNagl: ' + IntToStr(vIdUrzZewNagl), 100);
+              Exit;
+            end;
+
+            vSql := 'execute procedure xxx_zoo_zw_akt_pow('
+              + IntToStr(vIdUrzZewNagl) + ')';
+
+            if (ExecuteSQL(vSql, 0) <> 1) then
+            begin
+              Inf('Błąd przy tworzeniu powiązań między dokumentami:' + #13 + #10
+                + 'Magazyn: ' + IntToStr(vIdMagazyn)
+                + ', IdUrzZewNagl: ' + IntToStr(vIdUrzZewNagl), 100);
+              Exit;
+            end;
+          end;
+
+          vIdMagazyn := vDataSource.DataSet.FieldByName('id_magazyn').AsString;
+
+          vSql := 'select xuz.id_urzzew'
+               + ' from xxx_zoo_zw_urzzew xuz'
+               + ' where xuz.id_magazyn = ' + vIdMagazyn;
+
+          vIdUrzZew := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+          if not (vIdUrzZew > 0) then
+          begin
+            Inf('Nie przypisano urządzenia zewnętrznego do magazynu: ' + vIdMagazyn, 100);
+            Exit;
+          end;
+
+          vIdUrzZewNagl := WystawNaglDokZamWew(vIdMagazyn, vIdUrzZew);
+          if not (vIdUrzZewNagl > 0) then Exit;
+        end;
+
+        vSql := 'execute procedure XXX_ZOO_ZW_URZZEWPOZ_ADD('
+          + IntToStr(vIdUrzZewNagl) + ', '
+          + QuotedStr(vDataSource.DataSet.FieldByName('indeks').AsString) + ', '
+          + 'cast(' + CurrToStrSt(vDataSource.DataSet.FieldByName('ilosc').AsCurrency) + ' as numeric(18,4)), '
+          + 'null, null, null, ' + vDataSource.DataSet.FieldByName('id_poz').AsString + ')';
+
+        if (ExecuteSQL(vSql, 0) <> 1) then
+        begin
+          Inf('Nie utworzono pozycji urządzenia zewnętrznego:' + #13 + #10
+            + 'Magazyn: ' + IntToStr(vIdMagazyn)
+            + ', IdUrzZewNagl: ' + IntToStr(vIdUrzZewNagl)
+            + ', Poz: ' + vDataSource.DataSet.FieldByName('id_poz').AsString, 100);
+          Exit;
+        end;
+
+        vDataSource.DataSet.Next;
+      end;
+    finally
+      vDataSource.Free;
+    end;
+  finally
+    vQuery.Free;
+  end;
+
+  if (vIdUrzZewNagl > 0) then
+  begin
+    vSql := 'update urzzewnagl set odb_ilepoz = (select count(id_urzzewpoz) from urzzewpoz where id_urzzewnagl = ' + IntToStr(vIdUrzZewNagl) + '),'
+         + ' odb_suma = (select sum(odb_ilosc * odb_cena) from urzzewpoz where id_urzzewnagl = ' + IntToStr(vIdUrzZewNagl) + ')'
+         + ' where id_urzzewnagl = ' + IntToStr(vIdUrzZewNagl);
+
+    if (ExecuteSQL(vSql, 0) <> 1) then
+    begin
+      Inf('Błąd przy aktualizacji nagłówka urządzenia zewnętrznego:' + #13 + #10
+        + 'Magazyn: ' + IntToStr(vIdMagazyn)
+        + ', IdUrzZewNagl: ' + IntToStr(vIdUrzZewNagl), 100);
+      Exit;
+    end;
+
+    RealizujDokumentyOUZ(vIdUrzZew, vIdUrzZewNagl);
+
+    vSql := 'select u.id_nagl from urzzewnagl u where u.id_urzzewnagl = ' + IntToStr(vIdUrzZewNagl);
+
+    vIdNagl := Trim(GetFromQuerySQL(vSql, 0));
+    if (vIdNagl = '') then
+    begin
+      Inf('Nieokreślony dokument:' + #13 + #10
+        + 'Magazyn: ' + IntToStr(vIdMagazyn)
+        + ', IdUrzZewNagl: ' + IntToStr(vIdUrzZewNagl), 100);
+      Exit;
+    end;
+
+    vSql := 'execute procedure xxx_zoo_zw_akt_pow('
+      + IntToStr(vIdUrzZewNagl) + ')';
+
+    if (ExecuteSQL(vSql, 0) <> 1) then
+    begin
+      Inf('Błąd przy tworzeniu powiązań między dokumentami:' + #13 + #10
+        + 'Magazyn: ' + IntToStr(vIdMagazyn)
+        + ', IdUrzZewNagl: ' + IntToStr(vIdUrzZewNagl), 100);
+      Exit;
+    end;
+  end;
+end;
+
+function PokazOknoPozycji: Boolean;
+var
+  wListaId: TIntegerList;
+  vListaPoz: string;
+  i: Integer;
+  idCechaDok: string;
+begin
+  Result := False;
+  idCechaDok:='10203';
+  wpPozycje := TWindowPlugins.Create(cIdWindowPlugins_Pozycje);
+  try
+    wpPozycje.fWindowsPlugins.QueryMain.Transaction := TFIBTransaction(Transaction);
+    wpPozycje.Caption := 'Wybierz pozycje';
+
+    wpPozycje.IdColumns := 'id_poz';
+    wpPozycje.SqlSet('p.id_poz, p.id_nagl, n.nrdokwew, p.id_magazyn, p.id_kartoteka, p.lp,'
+      + ' p.kart_nazwadl, p.kart_nazwaskr, p.ilosc, p.jm, p.cenanetto, p.wartbrutto, pzw.ilzrealizzam,'
+      + ' k.indeks, m.nrmag, mdw.nazwamag',
+      'poz p'
+      + ' join nagl n on p.id_nagl = n.id_nagl'
+      + ' left join pozzamwsp pzw on p.id_poz = pzw.id_poz'
+      + ' left join kartoteka k on p.id_kartoteka = k.id_kartoteka'
+      + ' left join magazyn m on p.id_magazyn = m.id_magazyn'
+      + ' left join xxx_zoo_poz_do_zw xpoz on p.id_poz = xpoz.id_poz and xpoz.id = ' + IntToStr(IdProcesu)
+      + ' left join magazyn mdw on xpoz.id_magazyn = mdw.id_magazyn'
+      ,'p.id_nagl in (' + ListaIdNagl + ')'
+      + ' and p.ilosc > coalesce(pzw.ilzrealizzam, 0)'
+      , '', '', '');
+
+    wpPozycje.AddFields('poz', 'id_poz', 'p');
+    wpPozycje.AddFields('poz', 'id_nagl', 'p');
+    wpPozycje.LastField.Visible := False;
+    wpPozycje.AddFields('poz', 'id_magazyn', 'p');
+    wpPozycje.LastField.Visible := False;
+    wpPozycje.AddFields('poz', 'id_kartoteka', 'p');
+    wpPozycje.LastField.Visible := False;
+    wpPozycje.AddFields('poz', 'lp;kart_nazwaskr', 'p');
+    wpPozycje.AddFields('poz', 'kart_nazwadl', 'p');
+    wpPozycje.LastField.DisplayWidth := 50;
+    wpPozycje.AddFields('poz', 'ilosc;jm;cenanetto;wartbrutto', 'p');
+    wpPozycje.AddFields('kartoteka', 'indeks', 'k');
+    wpPozycje.AddFields('nagl', 'nrdokwew', 'n');
+    wpPozycje.AddFields('pozzamwsp', 'ilzrealizzam', 'pzw');
+    wpPozycje.AddFields('magazyn', 'nrmag', 'm');
+    wpPozycje.LastField.DisplayLabel := 'Magazyn';
+    wpPozycje.AddFields('magazyn', 'nazwamag', 'mdw');
+    wpPozycje.LastField.DisplayLabel := 'Magazyn do wystawienia';
+
+    wpPozycje.AddAction('Magazyn do wystawienia', 'Document Building', @wpPozycjeMagazynOnClick);
+    wpPozycje.AddAction('Usuń wprowadzone zmiany', 'warehouse_delete_24', @wpPozycjeWyczyscOnClick);
+
+    wpPozycje.fWindowsPlugins.DBGmain.OnDblClick := nil;
+    wpPozycje.fWindowsPlugins.AZ_ZamknijWybierz.Caption := 'Zatwierdź';
+    wpPozycje.fWindowsPlugins.AZ_ZamknijWybierz.Hint := 'Zatwierdź';
+    wpPozycje.fWindowsPlugins.AZ_ZamknijRezygnuj.Caption := 'Anuluj';
+    wpPozycje.fWindowsPlugins.AZ_ZamknijRezygnuj.Hint := 'Anuluj';
+    wpPozycje.fWindowsPlugins.AZ_ZamknijWyczysc.Caption := 'Zamknij i anuluj';
+    wpPozycje.fWindowsPlugins.AZ_ZamknijWyczysc.Hint := 'Zamknij i anuluj';
+
+    wpPozycje.fWindowsPlugins.OnCloseQuery := @wpPozycje_OnCloseQuery;
+    wpPozycje.fWindowsPlugins.AZ_ZamknijWybierz.OnExecute := @AZ_ZamknijWybierzOnExecute;
+
+    if not wpPozycje.ShowWindowCheck(wListaId) then Exit;
+  finally
+    wpPozycje.Free
+  end;
+
+  if (wListaId.Count = 0) then
+  begin
+    wListaId.Free;
+    Exit;
+  end;
+
+  vListaPoz := '';
+
+  try
+    for i := 0 to wListaId.Count - 1 do
+    begin
+      if (vListaPoz <> '') then
+        vListaPoz := vListaPoz + ',';
+      vListaPoz := vListaPoz + IntToStr(wListaId.GetValue(i));
+    end;
+  finally
+    wListaId.Free;
+  end;
+
+  if (vListaPoz = '') then Exit;
+
+  WystawDokumenty(vListaPoz);
+end;
+
+procedure UstawDomyslnyMagazyn;
+var
+  vSql: string;
+  idCechaDok: string;
+begin
+     idCechaDok := '10203';
+  { Stara wersja
+  vSql := 'execute block'
+       + ' as'
+       + ' declare id_poz integer;'
+       + ' begin'
+       + '   for'
+       + '   select p.id_poz'
+       + '   from poz p'
+       + '   left join pozzamwsp pzw on p.id_poz = pzw.id_poz'
+       + '   where p.id_nagl in (' + ListaIdNagl + ')'
+       + '   and p.ilosc > coalesce(pzw.ilzrealizzam, 0)'
+       + '   into :id_poz'
+       + '   do'
+       + '     insert into xxx_zoo_poz_do_zw (id, id_poz, id_magazyn)'
+       + '     values (' + IntToStr(IdProcesu) + ', :id_poz, ' + IntToStr(cIdMagazyn_Domyslny) + ');'
+       + ' end';
+       }
+       // Zmiana 22.09.2023 pobierania domyslnego magazynu z cechyDokumentu
+        vSql := 'execute block'
+       + ' as'
+       + ' declare id_poz integer;'
+       + ' declare id_magazyn integer;'
+       + ' begin'
+       + '   for'
+       + '   select p.id_poz,coalesce(mdw.id_magazyn,10070)'
+       + '   from poz p'
+       + '   left join pozzamwsp pzw on p.id_poz = pzw.id_poz'
+       + '   left join kartoteka k on k.id_kartoteka =p.id_kartoteka'
+       + '   left join WYSTCECHKART Wk on Wk.id_kartoteka =k.id_kartoteka and wk.id_cechadokk ='+idCechaDok
+       + '   left join MAGAZYN MDW on coalesce(wk.wartosc,0) = mdw.nazwamag'
+       + '   where p.id_nagl in (' + ListaIdNagl + ')'
+       + '   and p.ilosc > coalesce(pzw.ilzrealizzam, 0)'
+       + '   into :id_poz,:id_magazyn'
+       + '   do'
+       + '     insert into xxx_zoo_poz_do_zw (id, id_poz, id_magazyn)'
+       + '     values (' + IntToStr(IdProcesu) + ', :id_poz, ' + ':id_magazyn' + ');'
+       + ' end';
+
+  try
+    Transaction.WykonajSQL(vSql);
+  except
+    //Blad;
+    Exit;
+  end;
+end;
+
+procedure Wykonaj;
+var
+  vSql: string;
+  vDataSource: TDataSource;
+begin
+  vSql := 'select gen_id(xxx_gen_zoo_poz_do_zw, 1) from rdb$database';
+  IdProcesu := StrToInt(Trim(GetFromQuerySQL(vSql, 0)));
+
+  Transaction := TstTransaction.Create(nil);
+  try
+    vDataSource := OpenQuerySQL('select 1 from rdb$database', 0);
+    try
+      Transaction.DefaultDatabase := TstQuery(vDataSource.DataSet).Transaction.DefaultDatabase;
+    finally
+      CloseQuerySQL(vDataSource);
+    end;
+
+    Transaction.stBeginTrans('');
+    try
+      UstawDomyslnyMagazyn;
+      PokazOknoPozycji;
+    finally
+      if Transaction.InTransaction then
+        Transaction.stRollback('');
+    end;
+  finally
+    Transaction.Free;
+  end;
+end;
+
+begin
+  ListaIdNagl := Trim(string(DATAIN_LISTA_ID_NAGL));
+  if (ListaIdNagl = '') then Exit;
+
+  if not PobIdUzytk then Exit;
+
+  Wykonaj;
+end.

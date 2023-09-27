@@ -1,0 +1,217 @@
+{$ADDTYPE TstLabel}
+{$ADDTYPE TQEdit}
+{$ADDTYPE TstBitBtn}
+{$ADDTYPE TstPanel}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TDATASET}
+{$ADDTYPE TobrPozGmPalec}
+{$ADDTYPE TfDokGmEdPoz}
+{$ADDTYPE TobrDokGMPalec}
+{$ADDTYPE TfZlecenie}
+
+var
+  frm: TfZlecenie;
+
+procedure WyrobBezZmian(Sender:TObject);
+
+ var
+
+  temp : string;
+  idZlecenieList : TStringList;
+  i : Integer;
+
+begin
+
+temp := frm.queryMain.GetMarkedRows();
+if (temp <> '()') then
+begin
+
+Zastap('(', '', temp);
+Zastap(')', '', temp);
+Zastap(',', #13, temp);
+
+
+idZlecenieList:= TStringList.Create;
+try
+   idZlecenieList.Text := temp
+
+     for i:= 0 to idZlecenieList.Count-1 do
+          begin
+          //inf300(idPozList[i]);
+ExecuteSQL('Execute procedure XXX_ZLECENIE_STATUS_BEZZMIAN('+idZlecenieList[i]+')', 0);
+//inf300('Execute procedure XXX_ZP_PLANOWANIE_POZ('+idPozList[i]+')');
+
+
+end;
+
+   frm.DS_main.dataset.close();
+   frm.DS_main.dataset.open();
+   finally
+     idZlecenieList.Free;
+   end;
+   end;
+end;
+
+
+
+procedure ZmianaWzoru (Sender:TObject);
+
+ var
+
+  temp : string;
+  idZlecenieList : TStringList;
+  i : Integer;
+
+begin
+
+temp := frm.queryMain.GetMarkedRows();
+if (temp <> '()') then
+begin
+
+Zastap('(', '', temp);
+Zastap(')', '', temp);
+Zastap(',', #13, temp);
+
+
+idZlecenieList:= TStringList.Create;
+try
+   idZlecenieList.Text := temp
+
+     for i:= 0 to idZlecenieList.Count-1 do
+          begin
+          //inf300(idPozList[i]);
+ExecuteSQL('Execute procedure XXX_ZLECENIE_STATUS_ZmianaWzoru('+idZlecenieList[i]+')', 0);
+//inf300('Execute procedure XXX_ZP_PLANOWANIE_POZ('+idPozList[i]+')');
+
+
+end;
+
+   frm.DS_main.dataset.close();
+   frm.DS_main.dataset.open();
+   finally
+     idZlecenieList.Free;
+   end;
+   end;
+end;
+
+procedure NowyWzor(Sender:TObject);
+
+ var
+
+  temp : string;
+  idZlecenieList : TStringList;
+  i : Integer;
+
+begin
+
+temp := frm.queryMain.GetMarkedRows();
+if (temp <> '()') then
+begin
+
+Zastap('(', '', temp);
+Zastap(')', '', temp);
+Zastap(',', #13, temp);
+
+
+idZlecenieList:= TStringList.Create;
+try
+   idZlecenieList.Text := temp
+
+     for i:= 0 to idZlecenieList.Count-1 do
+          begin
+          //inf300(idPozList[i]);
+ExecuteSQL('Execute procedure XXX_ZLECENIE_STATUS_NOWYWZOR('+idZlecenieList[i]+')', 0);
+//inf300('Execute procedure XXX_ZP_PLANOWANIE_POZ('+idPozList[i]+')');
+
+
+end;
+
+   frm.DS_main.dataset.close();
+   frm.DS_main.dataset.open();
+   finally
+     idZlecenieList.Free;
+   end;
+   end;
+end;
+
+
+procedure DodajDyspozycje(Sender:TObject);
+var vIdZlec :Integer;
+vIdMagazyn :Integer;
+vSql: string;
+wartoscCechy:string;
+begin
+  frm.AD_DodajZTPPExecute(Sender);
+
+
+
+if not frm.QueryMain.FieldByName('ID_ZLECENIE').IsNull then
+  begin
+
+  vIdZlec := frm.QueryMain.FieldByName('ID_ZLECENIE').AsInteger;
+
+
+
+
+    vSql := 'select first 1 M.id_magazyn'
+         +  ' from MATERIAL M'
+         +  ' inner join OPERACJA O on O.ID_OPERACJA = M.ID_OPERACJA'
+         +  ' inner join MAGAZYN MG on MG.ID_MAGAZYN = M.ID_MAGAZYN'
+         +  ' where (O.ID_ZLECENIE = ' + IntToStr(vIdZlec) + ' )';
+
+
+
+  vIdMagazyn := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+
+   if (vIdMagazyn < 0) then
+    begin
+      Inf('Nieokreślony Magazyn.', 100);
+      Exit;
+    end;
+
+    vSql := 'select UPPER(w.wartosc)'
+         + ' from WYSTCECHYMAGAZYN W'
+         + ' where (W.ID_CECHA = 10123) and'
+         + ' (W.ID_MAGAZYN = ' + IntToStr(vIdMagazyn)+' )'
+
+
+    wartoscCechy := Trim(GetFromQuerySQL(vSql, 0));
+
+
+
+   if( wartoscCechy = 'TAK') then
+   begin
+
+   SetGlobalData('TfZlecenie_GenDyspWyd', 'TRUE');
+
+   try
+
+      frm.AD_GenerujZamWewExecute(frm.AD_GenerujZamWew);
+      finally
+             SetGlobalData('TfZlecenie_GenDyspWyd', '');
+      end;
+  end;
+
+  end;
+end;
+
+
+begin
+
+  if (Self is TfZlecenie) then
+  begin
+    if (frm = nil) then
+    begin
+      frm := TfZlecenie(Self);
+      //frm.AD_GenerujZamWewExecute(Sender:TObject)
+
+      frm.AD_DodajZTPP.OnExecute := @DodajDyspozycje;
+    end;
+
+
+     PluginsAddAction(self,'WyrobBezZmian', 'Filled Circle Filled Green', @WyrobBezZmian);
+     PluginsAddAction(self,'ZmianaWzoru', 'Filled Circle Filled Yellow', @ZmianaWzoru);
+     PluginsAddAction(self,'NowyWzor', 'Filled Circle Filled Red', @NowyWzor);
+
+  end;
+end.

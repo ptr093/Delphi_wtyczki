@@ -1,0 +1,59 @@
+{$ADDTYPE TLogMagService}
+{$ADDTYPE TfPostepOp}
+{$ADDTYPE TStringList}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TfWindowPlugins}
+{$ADDTYPE TWindowPlugins}
+procedure Wykonaj;
+var
+   wynik: string;
+   vSql: string;
+   vDS: TDataSource;
+begin
+
+   vSql:='with c as('
+   +' select'
+   +' d.id_kartoteka,n.nrdokzew , d.datadok ,(select first 1 konh.id_kontrah  from'
+   +' poz POZZ'
+   +' join NAGL NAG on (NAG.ID_NAGL = POZZ.ID_NAGL)'
+   +' join KONTRAH KONH on (KONH.ID_KONTRAH = NAG.ID_KONTRAH)'
+   +' where pozz.id_kartoteka =d.id_kartoteka) as id_kontrah'
+   +' from DOSTAWA D'
+   +' inner join POZ P on (D.ID_POZ = P.ID_POZ)'
+   +' inner join NAGL N on (P.ID_NAGL = N.ID_NAGL)'
+   +' inner join DEFDOK DD on (N.ID_DEFDOK = DD.ID_DEFDOK)'
+   +' inner join SPISDOK SD on (DD.ID_SPISDOK = SD.ID_SPISDOK) and (D.ZREALIZOWANA = 0)'
+   +' inner join UZYTKOWNIK UZ on (N.ID_UZYTKOWNIK = UZ.ID_UZYTKOWNIK)'
+   +' where SD.ID_SPISDOK = 120'
+   +' )'
+   +' select distinct c.nrdokzew,k.nazwaskr from c'
+   +' join WYSTCECHYKONTRAH w on (w.id_kontrah =c.id_kontrah and w.id_cecha =10132)'
+   +' join kontrah k on k.ID_KONTRAH= c.ID_KONTRAH'
+   +' join xxx_kontrahent_ustawiona_cecha xkac on xkac.id_kontrah = k.id_kontrah'
+   +' where cast(datediff(day from xkac.data_zdarzenia to current_timestamp) as integer) > cast( replace(xkac.wartosc_cechy,'','',''.'') as integer)'
+   +' and cast(replace(xkac.wartosc_cechy,'','',''.'') as integer) <> 0'
+
+   wynik:= '<b>Dokumenty PW których czas realizcji został przekroczony</b>' + #13 + #10;
+
+   vDS := OpenQuerySQL(vSql, 0);
+   try
+      vDS.DataSet.First;
+      while not vDS.DataSet.Eof do
+        begin
+           wynik:= wynik + 'nr dok zew: ' +  vDS.DataSet.FieldByName('nrdokzew').AsString +' nazwa kontrahenta: '
+          + vDS.DataSet.FieldByName('nazwaskr').AsString + #13 + #10;
+
+          vDS.DataSet.Next;
+        end;
+
+    finally
+     CloseQuerySQL(vDS);
+    end;
+    inf(wynik,100);
+
+end;
+
+
+begin
+ Wykonaj;
+end.

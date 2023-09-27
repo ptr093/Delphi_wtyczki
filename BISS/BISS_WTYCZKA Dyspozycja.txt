@@ -1,0 +1,266 @@
+{$ADDTYPE TLogMagService}
+{$ADDTYPE TfPostepOp}
+{$ADDTYPE TStringList}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TfWindowPlugins}
+{$ADDTYPE TWindowPlugins}
+
+var
+  IdNagl: Integer;
+  ID_DefDok: Integer;
+
+
+const
+  cRodzajSprzDyspW = '50';
+
+function JsonDoWynik(const AJson: string): Integer;
+var
+  s: string;
+  sl: TStringList;
+begin
+  Result := -1;
+
+  //{"Wynik":0,"Blad":0,"BladEx":0,"BladTxt":""}
+  s := Trim(AJson);
+  if (Length(s) = 0) then Exit;
+  s := Copy(s, 2, Length(s) - 2);
+  Zastap(',', #13 + #10, s);
+
+  sl := TStringList.Create;
+  try
+    sl.NameValueSeparator := ':';
+    sl.Text := s;
+    s := Trim(sl.Values['"Wynik"']);
+  finally
+    sl.Free;
+  end;
+
+  if (Length(s) = 0) then Exit;
+
+  Result := StrToInt(s);
+end;
+
+procedure UstawPostepOpis(const APostepOp: TfPostepOp; const AOpis: string);
+begin
+  APostepOp.StepIt(0, AOpis);
+  APostepOp.Position1 := 0;
+  APostepOp.Repaint;
+  Sleep(25);
+end;
+
+procedure UstawPostepPozycja(const APostepOp: TfPostepOp; const APozycja: Integer);
+begin
+  APostepOp.Position1 := APozycja;
+  APostepOp.Repaint;
+  Sleep(25);
+end;
+
+procedure Wykonaj;
+var
+  vIdZlecRekl: Integer;
+  vIdKontrahZgl: Integer;
+  vListaPozZlecRekl: string;
+  vIdMagazynDyspozycja: Integer;
+  vIdMagazyn: Integer;
+  vListaIdDysp: string;
+  fPostepOp: TfPostepOp;
+  vLogMagService: TLogMagService;
+  vDS: TDataSource;
+  vIdDysp: Integer;
+  vIdPozDysp: Integer;
+  vBlad: string;
+  vSql: string;
+begin
+    {vSql := 'select count(id)'
+         + ' from xxx_zlecreklsprz'
+         + ' where id_zlecrekl = ' + IntToStr(vIdZlecRekl)
+         + ' and rodzajsprz = ' + cRodzajSprzDyspW;
+
+    if (StrToInt(Trim(GetFromQuerySQL(vSql, 0))) > 0) then
+    begin
+      Inf('Dla zlecenia reklamacyjnego wystawiono już dyspozycję wydania.', 100);
+      //Exit;
+    end;}
+
+    //IdNagl
+
+    vSql := 'select id_kontrah from nagl where id_nagl = ' + IntToStr(IdNagl);
+
+    vIdKontrahZgl := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+  {  if (vIdKontrahZgl < 0) then
+    begin
+      Inf('Nieokreślony kontrahent.', 100);
+      Exit;
+    end; }
+
+    //vListaPozZlecRekl := WybierzPozZlecRekl(vIdZlecRekl);
+    //if (vListaPozZlecRekl = '') then Exit;
+
+    //vListaPozZlecRekl := 'LISTA SELECTY LIST...';/////////////////////////////////////
+
+    {vSql := 'select count(zrp.id_zlecreklpoz)'
+         + ' from zlecreklpoz zrp'
+         + ' left outer join poz p on zrp.id_poz = p.id_poz'
+         + ' where zrp.id_zlecrekl = ' + IntToStr(vIdZlecRekl)
+         + ' and zrp.id_zlecreklpoz in (' + vListaPozZlecRekl + ')'
+         + ' and p.id_magazyn is null';
+
+    if (StrToInt(Trim(GetFromQuerySQL(vSql, 0))) > 0) then
+    begin
+      PokazPozZlecReklBezMag(vListaPozZlecRekl);
+      vIdMagazynDyspozycja := WybierzMagazyn('Wskaż magazyn na którym ma się pojawić dyspozycja dla pozycji zlecenia reklamacyjnego bez określonego magazynu', True);
+      if (vIdMagazynDyspozycja < 0) then Exit;
+    end; }
+
+    fPostepOp := TfPostepOp.Create(Self);
+    try
+    inf300('1');
+      fPostepOp.Title := 'Proszę czekać...';
+      fPostepOp.AllowBreak := False;
+      fPostepOp.Max1 := 1;
+      fPostepOp.Position1 := 0;
+      fPostepOp.FormStyle := fsStayOnTop;
+      fPostepOp.ShowWindow;
+
+      vLogMagService := TLogMagService.Create(Self);
+      try
+        UstawPostepOpis(fPostepOp, 'Generowanie dyspozycji wydania');
+
+        vIdMagazyn := 10001;
+        ID_DefDok:= 2020;
+        vIdKontrahZgl:=1;
+              UstawPostepOpis(fPostepOp, 'Dodawanie dyspozycji wydania');
+
+              vBlad := vLogMagService.DodajDokDyspozycjaMag(
+                       '{"ID_DefDok":' + IntToStr(ID_DefDok)+
+                       ',"ID_Magazyn":' + IntToStr(vIdMagazyn) +
+                       ',"ID_Kontrah":' + IntToStr(vIdKontrahZgl) +
+                       ',"ID_MagazynNa":' + IntToStr(10001) + '}');
+
+              vIdDysp := JsonDoWynik(vBlad);
+
+              if not (vIdDysp > 0) then
+              begin
+                Inf('Błąd przy generowaniu dyspozycji wydania.' + #13 + #10
+                  + 'Magazyn: ' + IntToStr(vIdMagazyn), 100);
+                Exit;
+              end;
+
+
+
+                   vSql := 'insert into DYSPSPRZ (ID_DYSP, RODZAJSPRZ, ID_NAGL)'
+                   + ' values ('
+                   + intToStr(vIdDysp) +', '
+                   + cRodzajSprzDyspW + ', '
+                   + IntToStr(IdNagl) + ')';
+
+
+
+
+
+
+              if (ExecuteSQL(vSql, 0) <> 1) then
+              begin
+                Inf('Nie powiązano zamowienia wewnętrznego z dyspozycją wydania.' + #13 + #10
+                  + 'Magazyn: ' + IntToStr(vIdMagazyn) + ', dyspozycja: ' + IntToStr(vIdDysp), 100);
+                Exit;
+              end;
+
+
+
+              UstawPostepPozycja(fPostepOp, 1);
+
+
+
+
+        vSql :='select k.id_kartoteka,'+ IntToStr(vIdMagazyn) + ' as id_magazyn, p.ilosc, p.id_poz '
+               +' from POZ P'
+               +' left outer join POZZAMWSP PZW on (P.ID_POZ = PZW.ID_POZ)'
+               +' left outer join KARTOTEKA K on (P.ID_KARTOTEKA = K.ID_KARTOTEKA)'
+               +' where P.ID_NAGL =' +IntToStr(IdNagl)
+
+
+        vDS := OpenQuerySQL(vSql, 0);
+        try
+
+          vDS.DataSet.First;
+          while not vDS.DataSet.Eof do
+          begin
+            UstawPostepOpis(fPostepOp, 'Dodawanie pozycji do dyspozycji wydania');
+
+            vBlad := vLogMagService.DodajPozDyspozycjaMag(
+                      '{"ID_Dysp":' + IntToStr(vIdDysp) +
+                      ',"ID_Kartoteka":' + vDS.DataSet.FieldByName('id_kartoteka').AsString +
+                      ',"Ilosc":' + vDS.DataSet.FieldByName('ilosc').AsString + + '}');
+            vIdPozDysp := JsonDoWynik(vBlad);
+
+            if not (vIdPozDysp > 0) then
+            begin
+              Inf('Błąd przy dodawaniu pozycji do dyspozycji wydania.' + #13 + #10
+                + 'Magazyn: ' + IntToStr(vIdMagazyn) + ', dyspozycja: ' + IntToStr(vIdDysp)
+                + ', kartoteka: ' + vDS.DataSet.FieldByName('id_kartoteka').AsString, 100);
+              Exit;
+            end;
+
+
+
+            vSql :='INSERT INTO POZDYSPSPRZ (ID_POZDYSP, RODZAJSPRZ, ID_POZ, ID_DYSP, ID_NAGL) '
+              + ' values ('
+              + intToStr(vIdPozDysp) + ', '
+              + cRodzajSprzDyspW + ', '
+              + vDS.DataSet.FieldByName('id_poz').AsString +', '
+              + intToStr(vIdDysp) +', '
+              + IntToStr(IdNagl) + ')';
+
+            UstawPostepPozycja(fPostepOp, 1);
+
+            vDS.DataSet.Next;
+          end;
+        finally
+          CloseQuerySQL(vDS);
+        end;
+
+
+          UstawPostepOpis(fPostepOp, 'Zmiana statusu dyspozycji wydania');
+
+
+
+
+          vSql := 'update DYSP'
+               + ' set ID_STATUSDYSP = 0'
+               + ' where ID_DYSP = ' +  intToStr(vIdDysp);
+
+          if (ExecuteSQL(vSql, 0) <> 1) then
+          begin
+            Inf('Błąd przy zmianie statusu dyspozycji.', 100);
+            Exit;
+          end;
+
+          UstawPostepPozycja(fPostepOp, 1);
+
+      finally
+        vLogMagService.Free;
+      end;
+
+
+     // Inf('Utworzono dyspozycję wydania.', 100);
+    finally
+      fPostepOp.Free;
+    end;
+  end;
+
+begin
+
+
+//DATAIN_ID_NAGL
+//trim(string(DATAIN_Rodzaj_Edycji))
+
+  if (trim(string(DATAIN_Rodzaj_Edycji)) <> '3') then exit;
+
+
+  IdNagl := StrToIntDef(Trim(string(DATAIN_ID_NAGL)), 0);
+
+  if (IdNagl = 0) then Exit;
+
+  Wykonaj;
+end.

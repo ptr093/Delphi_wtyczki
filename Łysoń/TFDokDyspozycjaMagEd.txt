@@ -1,0 +1,58 @@
+ {$ADDTYPE TQDYSP}
+{$ADDTYPE TDMDokDyspozycjaMag}
+{$ADDTYPE TstBitBtn}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TQNAGL}
+{$ADDTYPE TobrDokGMPalec}
+{$ADDTYPE TFDokDyspozycjaMagEd}
+
+{$AT TDotNetPrestiz}
+
+var
+  frm : TFDokDyspozycjaMagEd;
+  BBAktualizacjaCechy:TstBitBtn;
+
+
+procedure bbAktualizacjaCechyAkcja(Sender: TObject);
+var
+  wDNRun: TDotNetPrestiz;
+  res : string;
+  idDysp: string;
+  idCechaDok:string;
+  swartcechadok:string;
+begin
+
+    idDysp:=frm.DmEdycja.FQDysp.ID_DYSP.ASSTRING;
+    idCechaDok:='10202';
+    swartcechadok:='10002';
+    wDNRun :=  TDotNetPrestiz.Create;
+    res := wDNRun.RunDotNetProgram('Łysoń_GRID',idDysp+'|'+idCechaDok+'|'+swartcechadok,'');
+    wDNRun.Free;
+    frm.DS_PozDysp.DataSet.REFRESH;
+end;
+
+procedure AktualizujCeche;
+begin
+ if (BBAktualizacjaCechy = nil) then
+ begin
+
+      BBAktualizacjaCechy:=TstBitBtn.Create(Self);
+      BBAktualizacjaCechy.Name := 'Aktualizacja cechy dla pozycji';
+      //BBAktualizacjaCechy.SetBounds(40, 130, 32, 32);
+      BBAktualizacjaCechy.SetBounds(frm.BBzapisz.Left-10, frm.BBzapisz.top, 40, frm.BBzapisz.Height);
+      //BBAktualizacjaCechy.Width := 40;
+      BBAktualizacjaCechy.Caption := '';
+      BBAktualizacjaCechy.RepoName := 'world_upload_24';
+      BBAktualizacjaCechy.parent:=  frm.BBzapisz.Parent;
+      BBAktualizacjaCechy.OnClick := @bbAktualizacjaCechyAkcja;
+ end;
+end;
+
+begin
+
+     if not (self is TFDokDyspozycjaMagEd) then exit;
+      frm := TFDokDyspozycjaMagEd(self);
+       AktualizujCeche;
+
+
+end.

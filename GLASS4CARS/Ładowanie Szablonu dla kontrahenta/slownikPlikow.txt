@@ -1,0 +1,66 @@
+//css_ref Glass4Cars_Grid.dll
+//css_inc Global.cs
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Data;
+using Streamsoft;
+using Streamsoft.Global;
+using Glass4Cars_Grid;
+
+namespace Glass4Cars_Grid
+{
+    class Program
+    {
+   	    public static Glass4Cars_Grid akr;
+		public static int ID_Kontrahent = 10002;
+		public static int ID_Kartoteka = 10002;
+		public static int IdTypPozycji = 10002;
+        public static IPCBConnection pcbConn;
+    	
+        [STAThread]
+        public static string Main(string[] args)
+        { 
+        	string[] argumenty = args[0].Split('|');
+        	
+        	try
+            {
+              Int32.TryParse(argumenty[0], out Glass4Cars_Grid.ID_Kontrahent); 
+			  Int32.TryParse(argumenty[1], out Glass4Cars_Grid.ID_Kartoteka);
+			  Int32.TryParse(argumenty[2], out Glass4Cars_Grid.IdTypPozycji);				  
+            }
+            catch
+            {
+            	return "BŁĄD ARGUMENTÓW";
+            }
+            
+            pcbConn = new PCBConnection();
+            
+            pcbConn.bindExecuteSQL((string s) => {STDB.ExecuteSQL(s); });
+            pcbConn.bindGetLastErrorSQL(() => { return STDB.GetLastErrorSQL(); });
+       	    pcbConn.bindDataTableToComboBox((DataTable dt, bool a, string s) => { return STDB.DataTableToComboBox(dt,a,s); });
+    	    pcbConn.bindExecuteDataTable((string s) => { return STDB.ExecuteDataTable(s); });
+	        pcbConn.bindExecuteReader((string s) => {   return STDB.ExecuteReader(s);  });
+	        pcbConn.bindGetDataTableSql((string s) => { return STDB.GetDataTableSQL(s,null); });
+	    	pcbConn.bindGetFromSql((string s) => { return STDB.GetFromSQL(s); });
+	    	pcbConn.bindGetStringFromSql((string s) => { return STDB.GetStringFromSQL(s); });
+	    	pcbConn.bindSetDataTableChanges((DataTable x) => {STDB.SetDataTableChanges(x); });
+	  	 	
+			Glass4Cars_Grid.pcb = pcbConn;
+
+            akr = new Glass4Cars_Grid();
+
+            System.Windows.Forms.DialogResult dlgRes = akr.ShowDialog();
+
+               
+            akr.Dispose();
+            if (dlgRes == System.Windows.Forms.DialogResult.Cancel) 
+              	return "ANULUJ";
+            else           
+            	return "OK";
+        }        
+    }
+}

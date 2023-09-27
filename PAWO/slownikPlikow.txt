@@ -1,0 +1,52 @@
+ //css_ref Pawo_usuwanieMaili.dll
+//css_inc Global.cs
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Data;
+using Streamsoft;
+using Streamsoft.Global;
+using Pawo_usuwanieMaili;
+
+namespace Pawo_usuwanieMaili
+{
+    class Program
+    {
+   	    public static Pawo_usuwanieMaili akr;
+
+        public static IPCBConnection pcbConn;
+    	
+        [STAThread]
+        public static string Main(string[] args)
+        { 
+        	
+            
+            pcbConn = new PCBConnection();
+            
+            pcbConn.bindExecuteSQL((string s) => {STDB.ExecuteSQL(s); });
+            pcbConn.bindGetLastErrorSQL(() => { return STDB.GetLastErrorSQL(); });
+       	    pcbConn.bindDataTableToComboBox((DataTable dt, bool a, string s) => { return STDB.DataTableToComboBox(dt,a,s); });
+    	    pcbConn.bindExecuteDataTable((string s) => { return STDB.ExecuteDataTable(s); });
+	        pcbConn.bindExecuteReader((string s) => {   return STDB.ExecuteReader(s);  });
+	        pcbConn.bindGetDataTableSql((string s) => { return STDB.GetDataTableSQL(s,null); });
+	    	pcbConn.bindGetFromSql((string s) => { return STDB.GetFromSQL(s); });
+	    	pcbConn.bindGetStringFromSql((string s) => { return STDB.GetStringFromSQL(s); });
+	    	pcbConn.bindSetDataTableChanges((DataTable x) => {STDB.SetDataTableChanges(x); });
+	  	 	
+			Pawo_usuwanieMaili.pcb = pcbConn;
+
+            akr = new Pawo_usuwanieMaili();
+
+            System.Windows.Forms.DialogResult dlgRes = akr.ShowDialog();
+                         
+              akr.Dispose();
+            if (dlgRes == System.Windows.Forms.DialogResult.Cancel) 
+              	return "ANULUJ";
+            else           
+            	return "OK";
+        }        
+    }
+}

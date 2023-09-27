@@ -1,0 +1,226 @@
+ //TfSekDokPozEd
+{$ADDTYPE TSlownikBtn}
+{$ADDTYPE TTypAnalityka}
+{$ADDTYPE TlistObject}
+{$ADDTYPE TDM_SekDokPoz}
+{$ADDTYPE TfSekDokPozEd}
+
+var
+  fSekDokPozEd: TfSekDokPozEd;
+  IdEtapAkceptSzablon: Integer;
+
+const
+  cIdPoleRodzaj_SlownikNaPozycji = 5;
+
+function PobIdEtapAkceptSzablon: Integer;
+var
+  vIdSciezkaAkcept: Integer;
+  vEtapAkceptNazwa: string;
+  vIdEtapAkcept: Integer;
+  vSql: string;
+begin
+  Result := -1;
+
+  if not ((fSekDokPozEd.klEdycji = F3) or (fSekDokPozEd.klEdycji = F5)) then Exit;
+
+  vSql := 'select srd.id_sciezkaakcept'
+       + ' from sekdok sd'
+       + ' join sekrodzajdok srd on sd.id_sekrodzajdok = srd.id_sekrodzajdok'
+       + ' where sd.id_sekdok = ' + IntToStr(fSekDokPozEd.DmEdycja.Id_SekDok);
+
+  vIdSciezkaAkcept := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+  if (vIdSciezkaAkcept < 0) then Exit;
+
+  vSql := 'select ea.nazwa'
+       + ' from sekdok sd'
+       + ' join etapakcept ea on sd.id_sciezkaakcept = ea.id_sciezkaakcept and ea.inicjator = 0 and ea.aktualny = 1'
+       + ' where sd.id_sekdok = ' + IntToStr(fSekDokPozEd.DmEdycja.Id_SekDok);
+
+  vEtapAkceptNazwa := GetFromQuerySQL(vSql, 0);
+
+  vSql := 'select first 1 ea.id_etapakcept'
+       + ' from etapakcept ea'
+       + ' where ea.id_sciezkaakcept = ' + IntToStr(vIdSciezkaAkcept)
+       + ' and ea.nazwa = ' + QuotedStr(vEtapAkceptNazwa)
+       + ' order by ea.lp';
+
+  vIdEtapAkcept := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+  if (vIdEtapAkcept < 0) then Exit;
+
+  Result := vIdEtapAkcept;
+end;
+
+procedure UstawBlokadeParametrow(const AIdEtapAkcept: Integer);
+var
+  vSql: string;
+  vDS: TDataSource;
+  vTypAnalityka: TTypAnalityka;
+  i: Integer;
+begin
+  if not ((fSekDokPozEd.klEdycji = F3) or (fSekDokPozEd.klEdycji = F5)) then Exit;
+
+  if (AIdEtapAkcept < 0) then Exit;
+
+  vSql := 'select xep.id_etapakcept_pole, xep.id_etapakcept, xep.id_pole_slownik, xep.wymagany, xep.blokowany, xep.id_analityka'
+       + ' from xxx_dms_etapakcept_pole xep'
+       + ' join xxx_dms_pole_slownik xps on xep.id_pole_slownik = xps.id_pole_slownik'
+       + ' where xep.id_etapakcept = ' + IntToStr(AIdEtapAkcept)
+       + ' and xep.id_analityka is not null'
+       + ' and xep.blokowany = 1'
+       + ' and xps.id_pole_rodzaj = ' + IntToStr(cIdPoleRodzaj_SlownikNaPozycji)
+       + ' order by xep.id_etapakcept_pole';
+
+  vDS := OpenQuerySQL(vSql, 0);
+  try
+    vDS.DataSet.First;
+    while not vDS.DataSet.Eof do
+    begin
+      for i := 0 to fSekDokPozEd.DmEdycja.fListaAnalityk.Count - 1 do
+      begin
+        vTypAnalityka := TTypAnalityka(fSekDokPozEd.DmEdycja.fListaAnalityk.Items[i]);
+        if (vTypAnalityka.ID_Analityka = vDS.DataSet.FieldByName('id_analityka').AsInteger) then
+        begin
+          vTypAnalityka.Edit.ReadOnly := True;
+          vTypAnalityka.Sbtn.ReadOnly := True;
+        end;
+      end;
+
+      vDS.DataSet.Next;
+    end;
+  finally
+    CloseQuerySQL(vDS);
+  end;
+end;
+
+
+function ZaladujSlowniki(const AIdEtapAkcept: Integer): Boolean;
+var
+  vSql: string;
+  vDS: TDataSource;
+  vLog: string;
+  vTypAnalityka: TTypAnalityka;
+  IdKontrahent : Integer;
+  i: Integer;
+  IdKartoteka : Integer;
+begin
+  Result := True;
+
+  if not ((fSekDokPozEd.klEdycji = F3) or (fSekDokPozEd.klEdycji = F5)) then Exit;
+
+    vSql := 'SELECT Id_kartoteka FROM KARTOTEKA '
+       + ' where indeks ='''  + fSekDokPozEd.EIndeks.Text +'''' ;
+
+  IdKartoteka := StrToInt(GetFromQuerySQL(vSql, 0));
+  if (IdKartoteka = 0) then Exit;
+
+
+  IdKontrahent:= StrToInt((GetGlobalData('ID_Kontrahent')));
+
+  Vsql:= 'select ID_KONTRAHENT, ID_KARTOTEKA, ID_TYPPOZYCJI_ANALITYKA, ID_SLOWNIK, ID_RODZAJSLOWNIKA from XXX_DMS_SZABLON'
+         +' WHERE ID_KONTRAHENT =' + IntToStr(IdKontrahent) +' AND ID_KARTOTEKA ='+IntToStr(IdKartoteka);
+
+
+
+
+  vDS := OpenQuerySQL(vSql, 0);
+  if (vDS=nil) then exit;
+  try
+    vDS.DataSet.First;
+    while not vDS.DataSet.Eof do
+    begin
+      for i := 0 to fSekDokPozEd.DmEdycja.fListaAnalityk.Count - 1 do
+      begin
+
+        vTypAnalityka := TTypAnalityka(fSekDokPozEd.DmEdycja.fListaAnalityk.Items[i]);
+          if (vTypAnalityka.ID_SLOWNIKRODZAJ =vDS.DataSet.FieldByName('ID_RODZAJSLOWNIKA').AsInteger) then
+          begin
+          vTypAnalityka.ID_Slownik:=vDS.DataSet.FieldByName('ID_SLOWNIK').AsInteger;
+
+          end;
+         end;
+      vDS.DataSet.Next;
+    end;
+  finally
+    CloseQuerySQL(vDS);
+  end;
+
+end;
+
+function SprawdzParametry(const AIdEtapAkcept: Integer): Boolean;
+var
+  vSql: string;
+  vDS: TDataSource;
+  vLog: string;
+  vTypAnalityka: TTypAnalityka;
+  i: Integer;
+begin
+  Result := True;
+
+  if not ((fSekDokPozEd.klEdycji = F3) or (fSekDokPozEd.klEdycji = F5)) then Exit;
+
+  if (AIdEtapAkcept < 0) then Exit;
+
+  vLog := '';
+
+  vSql := 'select xep.id_etapakcept_pole, xep.id_etapakcept, xep.id_pole_slownik, xep.wymagany, xep.blokowany, xep.id_analityka'
+       + ' from xxx_dms_etapakcept_pole xep'
+       + ' join xxx_dms_pole_slownik xps on xep.id_pole_slownik = xps.id_pole_slownik'
+       + ' where xep.id_etapakcept = ' + IntToStr(AIdEtapAkcept)
+       + ' and xep.id_analityka is not null'
+       + ' and xep.wymagany = 1'
+       + ' and xps.id_pole_rodzaj = ' + IntToStr(cIdPoleRodzaj_SlownikNaPozycji)
+       + ' order by xep.id_etapakcept_pole';
+
+  vDS := OpenQuerySQL(vSql, 0);
+  try
+    vDS.DataSet.First;
+    while not vDS.DataSet.Eof do
+    begin
+      for i := 0 to fSekDokPozEd.DmEdycja.fListaAnalityk.Count - 1 do
+      begin
+        vTypAnalityka := TTypAnalityka(fSekDokPozEd.DmEdycja.fListaAnalityk.Items[i]);
+        if (vTypAnalityka.ID_Analityka = vDS.DataSet.FieldByName('id_analityka').AsInteger) then
+          if (vTypAnalityka.ID_Slownik = 0) then
+          begin
+            if (vLog <> '') then
+              vLog := vLog + #13 + #10;
+            vLog := vLog + vTypAnalityka.NazwaAnal;
+          end;
+      end;
+      vDS.DataSet.Next;
+    end;
+  finally
+    CloseQuerySQL(vDS);
+  end;
+
+  if (vLog <> '') then
+  begin
+    Result := False;
+    Inf('Nie wszystkie wymagane dodatkowe słowniki zostały uzupełnione:' + #13 + #10 + vLog, 100);
+  end;
+end;
+
+procedure BBzapisz_OnClick(Sender: TObject);
+begin
+  if not SprawdzParametry(IdEtapAkceptSzablon) then Exit;
+
+  fSekDokPozEd.BBzapiszClick(Sender);
+end;
+
+begin
+
+  if (Self is TfSekDokPozEd) then
+  begin
+    if (fSekDokPozEd = nil) then
+    begin
+      fSekDokPozEd := TfSekDokPozEd(Self);
+
+      fSekDokPozEd.BBzapisz.OnClick := @BBzapisz_OnClick;
+    end;
+
+    IdEtapAkceptSzablon := PobIdEtapAkceptSzablon;
+    UstawBlokadeParametrow(IdEtapAkceptSzablon);
+    if (GetGlobalData('SlownikPobierz')= 'TAK') then
+    ZaladujSlowniki(IdEtapAkceptSzablon);
+  end;
+end.

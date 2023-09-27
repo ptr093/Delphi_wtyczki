@@ -1,0 +1,147 @@
+var
+  IdMagazyn: Integer;
+  WszystkieMagazyny: Boolean;
+  A_WszystkieMagazyny: TAction;
+  mfbWszystkieMagazyny: TstMenuFlatButton;
+
+
+
+procedure UstawWszystkieMagazyny(const AWszystkie: Boolean);
+begin
+  A_WszystkieMagazyny.Enabled := True;
+  mfbWszystkieMagazyny.Down := AWszystkie;
+  A_WszystkieMagazyny.Checked := AWszystkie;
+  WszystkieMagazyny := AWszystkie;
+end;
+
+
+procedure ZmodyfikujSQLWszystkieMagazyny;
+var
+  s: string;
+begin
+  if (mfbWszystkieMagazyny = nil) then Exit;
+  if (IdMagazyn = 0) then Exit;
+
+  s := fDokMagazynDok.QueryMain.SqlWhereUser;
+
+
+  //Inf(s + '        ID_MAGAZYN: ' + IntToStr(IdMagazyn),100);
+  if WszystkieMagazyny then
+    Zastap('(N.Id_Magazyn = ' + IntToStr(IdMagazyn) + ')',
+      '(N.Id_Magazyn > 0)', s)
+  else
+    Zastap('(N.Id_Magazyn > 0)',
+      '(N.Id_Magazyn = ' + IntToStr(IdMagazyn) + ')', s);
+  //inf300(s + '        ID_MAGAZYN: ' + IntToStr(IdMagazyn));
+  fDokMagazynDok.QueryMain.SqlWhereUser := s;
+end;
+
+procedure WszystkieMagazynyExecute(Sender: TObject);
+var
+  vActionComponent: TComponent;
+begin
+  if (mfbWszystkieMagazyny = nil) then Exit;
+
+  if not (Sender is TAction) then Exit;
+
+  vActionComponent := TBasicAction(TAction(Sender)).ActionComponent;
+  if (vActionComponent = nil) then Exit;
+
+  if (vActionComponent is TMenuItem) then
+    if TAction(Sender).Checked then
+      mfbWszystkieMagazyny.Down := False
+    else
+      mfbWszystkieMagazyny.Down := True;
+
+  TAction(Sender).Checked := mfbWszystkieMagazyny.Down;
+  WszystkieMagazyny := mfbWszystkieMagazyny.Down;
+
+  fDokMagazynDok.QueryMain.Close;
+  fDokMagazynDok.QueryMain.Open('');
+end;
+
+
+function PobIdMagazynInteger: Integer;
+var
+  s: string;
+  i: Integer;
+begin
+  Result := 0;
+  s := fDokMagazynDok.QueryMain.SqlWhereUser;
+  i := Pos('(N.Id_Magazyn =', s);
+  if (i > 0) then
+  begin
+    s := Trim(Copy(s, i + Length('(N.Id_Magazyn ='), Length(s)));
+    i := Pos(')', s);
+    if (i > 0) then
+      Result := StrToIntDef(Trim(Copy(s, 1, i - 1)), 0);
+  end;
+end;
+
+
+procedure AddActionWszystkieMagazyny;
+begin
+      A_WszystkieMagazyny := PluginsAddAction(Self, 'Wszystkie magazyny', 'application_modules_24', @WszystkieMagazynyExecute);
+      mfbWszystkieMagazyny := FindButtonFromAction(A_WszystkieMagazyny);
+      if (mfbWszystkieMagazyny <> nil) then
+      begin
+        A_WszystkieMagazyny.GroupIndex := 9999; //wymagane podanie wartosci, bez tego nie dziala "down";
+        mfbWszystkieMagazyny.AllowAllUp := True;
+      end;
+
+      IdMagazyn := 0;
+      WszystkieMagazyny := False;
+
+      if (mfbWszystkieMagazyny <> nil) then
+      begin
+        IdMagazyn := PobIdMagazynInteger;
+        if (IdMagazyn > 0) then
+          UstawWszystkieMagazyny(false)
+        else
+          Inf('Błąd przy określaniu aktualnego magazynu.', 100);
+      end;
+end;
+
+procedure AS_MiejsceExecute(Sender: TObject);
+begin
+  if (mfbWszystkieMagazyny = nil) then
+  begin
+    fDokMagazynDok.AS_MiejsceExecute(Sender);
+    Exit;
+  end;
+
+  IdMagazyn := fDokMagazynDok.FlastId_Miejsce;
+  fDokMagazynDok.AS_MiejsceExecute(Sender);
+  //inf(inttostr(IdMagazyn) + '##' + inttostr(fDokZamowieniaDoDost.IdTableMiejsce),100);
+  if (IdMagazyn <> fDokMagazynDok.FlastId_Miejsce) then
+  begin
+    IdMagazyn := fDokMagazynDok.FlastId_Miejsce;
+    //inf(inttostr(IdMagazyn) + '##' + inttostr(fDokZamowieniaDoDost.IdTableMiejsce),100);
+    fDokMagazynDok.QueryMain.Close;
+    fDokMagazynDok.QueryMain.Open('');
+  end;
+end;
+
+
+// main
+
+ if (frm = nil) then
+    begin
+      frm :=  TfDokMagazynDok(Self);
+
+      frm.QPodstawa.stClose('');
+      frm.QPodstawa.BeforeOpen := @QPodstawaBeforeOpen;
+      frm.QPodstawa.stOpen('');
+
+      inf300('test123');
+      frm.QueryMain.stClose('');
+      frm.QueryMain.BeforeOpen := @BeforeOpen;
+      frm.AS_Miejsce.OnExecute := @AS_MiejsceExecute;
+      //frm.AD_Przenies.OnExecute := @AD_PrzeniesExecute;
+      frm.QueryMain.stOpen('');
+
+
+
+    end;
+
+     AddActionWszystkieMagazyny;

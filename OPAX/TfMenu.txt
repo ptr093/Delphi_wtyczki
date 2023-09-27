@@ -1,0 +1,30 @@
+
+//TfMnu
+{$ADDTYPE TfMnu}
+
+var
+  fMnu: TfMnu;
+
+procedure PokazKomunikat;
+
+begin
+ExecutePlugin('PokazKomunikat', nil, nil);
+
+end;
+
+
+begin
+  //inf300('<b>jestem tutaj?</b>');
+
+
+  if (Self is TfMnu) then
+  begin
+    if (fMnu = nil) then
+    begin
+
+      fMnu := TfMnu(Self);
+      PokazKomunikat;
+
+    end;
+  end;
+end.

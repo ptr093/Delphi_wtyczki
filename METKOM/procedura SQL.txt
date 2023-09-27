@@ -1,0 +1,79 @@
+create or alter procedure XXX_GET_JEDNOSTKA (
+    NAZWA varchar(300))
+returns (
+    JEDNOSTKA varchar(200))
+as
+declare variable TEMP_JEDNOSTKA varchar(200);
+declare variable KOD_TEMP varchar(200);
+declare variable KOD_POCZATKOWY varchar(200);
+declare variable KOD_POZOSTALY varchar(200);
+declare variable KOD_Przerobiony varchar(200)='';
+declare variable JEDNOSTKA_TEMP varchar(200) = '';
+BEGIN
+
+SELECT FIRST 1 SUBSTRING(:nazwa from 1 for POSITION(' ' in :nazwa)-1)
+FROM JEDNORG JO
+INTO :kod_temp;
+
+SELECT jo.kodzlozony
+FROM
+JEDNORG JO
+WHERE jo.nrjedn =:kod_temp
+INTO :KOD_POCZATKOWY;
+
+
+
+
+while (:KOD_POCZATKOWY like '%-%')
+do
+begin
+
+select first 1 SUBSTRING(:KOD_POCZATKOWY from 1 for POSITION('-' in :KOD_POCZATKOWY)-1) ,
+SUBSTRING(:KOD_POCZATKOWY from cast(POSITION('-' in :KOD_POCZATKOWY)+1 as integer) for  char_length(:KOD_POCZATKOWY))
+from JEDNORG JO
+into :kod_temp,kod_pozostaly;
+
+if(kod_przerobiony like '') then
+begin
+    kod_przerobiony =kod_temp;
+end
+else
+begin
+    kod_przerobiony =kod_przerobiony || '-' || kod_temp;
+end
+
+
+
+if(kod_przerobiony  not like '%-%') then
+begin
+select first 1 jo.nazwa from JEDNORG JO where jo.kodzlozony = :kod_temp
+into :temp_Jednostka;
+end
+else
+begin
+select first 1 jo.nazwa from JEDNORG JO where jo.KOD = :kod_temp and jo.kodzlozony= :kod_przerobiony
+into :temp_Jednostka;
+end
+
+
+Jednostka_temp= Jednostka_temp || ' '|| temp_Jednostka;
+
+kod_temp = kod_pozostaly;
+KOD_POCZATKOWY= kod_pozostaly;
+
+end
+
+
+kod_przerobiony =kod_przerobiony || '-' || kod_temp;
+select first 1 jo.nazwa from JEDNORG JO where jo.KOD = :kod_temp and jo.kodzlozony= :kod_przerobiony
+into :temp_Jednostka;
+Jednostka_temp= Jednostka_temp || ' '|| temp_Jednostka;
+
+select first 1 :Jednostka_temp from JEDNORG JO
+into :JEDNOSTKA;
+
+    SUSPEND;
+
+
+
+end

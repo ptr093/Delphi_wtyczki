@@ -1,0 +1,32 @@
+{$ADDTYPE TfKontrah}
+{$AT TDotNetPrestiz}
+
+var
+  mf : TFKontrah;
+  BBPawo_UsuwanieMailiM:TstBitBtn;
+const
+  C_NMVS_USER_GROUPS = 'Administratorzy';
+
+  procedure bbPawo_UsuwanieMaili(Sender: TObject);
+var
+  wDNRun: TDotNetPrestiz;
+  res : string;
+
+begin
+    wDNRun :=  TDotNetPrestiz.Create;
+    res := wDNRun.RunDotNetProgram('Pawo_usuwanieMaili', '','');
+
+  wDNRun.Free;
+
+end;
+
+begin
+
+
+  if not (self is TFKontrah) then exit;
+      mf := TFKontrah(self);
+   if(Pos(GetGroup, C_NMVS_USER_GROUPS)>0) then
+   begin
+   PluginsAddAction(Self, 'Usuwanie Maili', 'Attach', @bbPawo_UsuwanieMaili); //Dodanie przycisku
+   end
+end.

@@ -1,0 +1,180 @@
+// TfMat
+{$ADDTYPE TstQuery}
+{$ADDTYPE TKrDBGrid}
+{$ADDTYPE TStringList}
+{$ADDTYPE TstXPageControl}
+{$ADDTYPE TstStringList}
+{$ADDTYPE TLogMagService}
+{$ADDTYPE TLogMagServicePlugins}
+{$ADDTYPE TFCzytajCos}
+{$ADDTYPE TfWindowPlugins}
+{$ADDTYPE TWindowPlugins}
+{$ADDTYPE TfCzytajCos}
+{$ADDTYPE TfMat}
+
+var
+  frm : TfMat;
+  IdUzytkownik: Integer;
+  LogStringList: TStringList;
+  PlikLog: string;
+  frmWp: TWindowPlugins;
+  tsPozycje: TTabSheet;
+  gridPozycje: TKrDBGrid;
+  timerPozycje: TTimer;
+
+
+
+
+
+
+
+
+
+
+   procedure DS_main_OnDataChange(Sender: TObject; Field: TField);
+begin
+  frm.DS_mainDataChange(Sender, Field);
+
+  if (tsPozycje <> nil) then
+    if (frm.PC_dodinfo.ActivePageIndex = frm.PC_dodinfo.IndexOfTab(tsPozycje)) then
+    begin
+      timerPozycje.Enabled := False;
+      timerPozycje.Enabled := True;
+    end;
+end;
+
+procedure ReloadGridPozycje(Sender: TObject);
+var
+  vIdNagl: string;
+  vSql: string;
+  vDS: TDataSource;
+begin
+  timerPozycje.Enabled := False;
+  if (gridPozycje.DataSource <> nil) then
+    CloseQuerySQL(gridPozycje.DataSource);
+
+
+
+  vSql :='with  c as(' +
+' select     d.datadok,  D.NRDOKWEW, ' +
+' (select IloscZamowien   from   XXX_PODAJ_ILOSC_DYSPOZYCJI(10002,k.id_kartoteka,d.id_dysp,p.id_nagl)) as IloscZamowien, ' +
+' (select zrealizowano   from   XXX_PODAJ_ILOSC_DYSPOZYCJI(10002,k.id_kartoteka,d.id_dysp,p.id_nagl)) as Zrealizowano , '+
+' (select pozostalo   from   XXX_PODAJ_ILOSC_DYSPOZYCJI(10002,k.id_kartoteka,d.id_dysp,p.id_nagl)) as pozostlao '+
+' from DYSPSPRZ DSPRZ '+
+' left join DYSP D on (D.ID_DYSP = DSPRZ.ID_DYSP)'+
+' left join DEFDOK DD on (D.ID_DEFDOK = DD.ID_DEFDOK) '+
+' left join SPISDOK SS on (DD.ID_SPISDOK = SS.ID_SPISDOK) '+
+' left join UZYTKOWNIK UZ on (D.ID_UZYTKOWNIK = UZ.ID_UZYTKOWNIK) '+
+' left join poz p on  p.id_nagl = DSPRZ.ID_NAGL '+
+' left join KARTOTEKA K on (P.ID_KARTOTEKA = K.ID_KARTOTEKA) '+
+'where p.id_kartoteka =' + frm.DS_main.DataSet.FieldByName('ID_KARTOTEKA').AsString +
+' and  d.id_defdok in (10017) and '+
+' d.id_statusdysp not in (1, 3)) '+
+' select distinct c.ILOSCZAMOWIEN,c.ZREALIZOWANO,c.POZOSTLAO,c.DATADOK,c.NRDOKWEW from c '+
+' where c.IloscZamowien > 0 ';
+
+  vDS := OpenQuerySQL(vSql, 0);
+
+  if (vDS = nil) then Exit;
+
+ gridPozycje.DataSource := vDS;
+
+
+  with TDATETIMEFIELD(vDS.DataSet.FieldByName('DATADOK')) do
+  begin
+   DisplayLabel := 'Data Dok';
+ end;
+
+   with TSTRINGFIELD(vDS.DataSet.FieldByName('NRDOKWEW')) do
+  begin
+
+    DisplayLabel := 'Numer';
+  end;
+
+   with TNumericField(vDS.DataSet.FieldByName('ZREALIZOWANO')) do
+  begin
+    DisplayLabel := 'Zrelizowano';
+  end;
+
+ with TNumericField(vDS.DataSet.FieldByName('POZOSTLAO')) do
+  begin
+    DisplayLabel := 'POZOSTLAO';
+  end;
+
+   with TNumericField(vDS.DataSet.FieldByName('ILOSCZAMOWIEN')) do
+  begin
+    DisplayLabel := 'Ilość zam.';
+  end;
+
+
+
+
+
+
+  gridPozycje.Columns[0].Width := 100;
+  gridPozycje.Columns[1].Width := 100;
+  gridPozycje.Columns[2].Width := 100;
+  gridPozycje.Columns[3].Width := 300;
+  gridPozycje.Columns[4].Width := 300;
+
+
+end;
+
+
+procedure tsPozycje_OnShow(Sender: TObject);
+begin
+  ReloadGridPozycje(nil);
+end;
+
+procedure DodajZakladkePozycje;
+begin
+ tsPozycje := TTabSheet(frm.PC_dodinfo.FindComponent('tsPozycje'));
+  if (tsPozycje = nil) then
+  begin
+    tsPozycje := frm.PC_dodinfo.CreateTabSheet('ZamowieniaDysp');
+    tsPozycje.Caption := 'Zamowienia Dysp(+)';
+
+    gridPozycje := TKrDBGrid.Create(tsPozycje);
+    gridPozycje.Parent := tsPozycje;
+    gridPozycje.Align := alClient;
+    gridPozycje.TitleFont.Assign(frm.DBGmain.TitleFont);
+    gridPozycje.DefaultRowHeight := frm.DBGmain.DefaultRowHeight;
+    gridPozycje.Font.Assign(frm.DBGmain.Font);
+
+    timerPozycje := TTimer.Create(Self);
+    timerPozycje.Interval := 500;
+    timerPozycje.OnTimer := @ReloadGridPozycje;
+
+    tsPozycje.OnShow := @tsPozycje_OnShow;
+  end;
+
+  frm.DS_mainDataChange(nil, nil);
+end;
+
+
+
+
+
+
+
+
+
+begin
+  if (Self is TfMat) then
+  begin
+    if (frm = nil) then
+    begin
+      frm := Self as TfMat;
+    end;
+    if (frm <> nil) then
+    begin
+      PluginsAddAction(Self, 'Generuj RW, dyspozycje wydania i przyjęcia (Dekompletacja)', 'document_add_in_24', @WystawRW);
+      if(frm.WindowId = 5310) then
+      begin
+           frm := TfMat(Self);
+           DodajZakladkePozycje;
+           frm.DS_main.OnDataChange := @DS_main_OnDataChange;
+      end;
+    end;
+  end;
+end.

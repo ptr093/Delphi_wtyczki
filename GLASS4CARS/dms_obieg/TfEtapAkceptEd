@@ -1,0 +1,653 @@
+//TfEtapAkceptEd
+{$ADDTYPE TOnEditBtnClickEvent}
+{$ADDTYPE TstEditBtnType}
+{$ADDTYPE TstEditBtnsType}
+{$ADDTYPE TstEditButton}
+{$ADDTYPE TstEditBtns}
+{$ADDTYPE TstSeparatorStyle}
+{$ADDTYPE TstSeparator}
+{$ADDTYPE TstPanel}
+{$ADDTYPE TstComboBox}
+{$ADDTYPE TFIBDatabase}
+{$ADDTYPE TFIBTransaction}
+{$ADDTYPE TstTransaction}
+{$ADDTYPE TDMEtapAkcept}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TKrDBGrid}
+{$ADDTYPE TstXPageControl}
+{$ADDTYPE TfWindowPlugins}
+{$ADDTYPE TWindowPlugins}
+{$ADDTYPE TfEtapAkceptEd}
+
+var
+  fEtapAkceptEd: TfEtapAkceptEd;
+  Szablon: Boolean;
+  Transaction: TstTransaction;
+  dbgPolaWymaganeBlokowane: TKrDBGrid;
+  qPolaWymaganeBlokowane: TstQuery;
+  dsPolaWymaganeBlokowane: TDataSource;
+  stEditBtnsPolaWymaganeBlokowane: TstEditBtns;
+
+const
+  cIdPoleRodzaj_SlownikNaPozycji = 5;
+
+const
+  cWindowId_PoleSlownik = 12143453;
+  cWindowId_PoleSlownikAnalityka = 12143454;
+
+function AddPanel(const AOwner: TComponent; const AName: string; const AParent: TWinControl;
+         const ALeft, ATop, AWidth, AHeight: Integer; const AAlign: TAlign): TstPanel;
+begin
+  Result := TstPanel.Create(AOwner);
+  Result.Name := AName;
+  Result.Left := ALeft;
+  Result.Top := ATop;
+  Result.Width := AWidth;
+  Result.Height := AHeight;
+  Result.Caption := '';
+  Result.Align := AAlign;
+  Result.Parent := AParent;
+end;
+
+function PobIdPoleSlownik: Integer;
+var
+  wP: TWindowPlugins;
+  wId: Integer;
+begin
+  Result := -1;
+  wP := TWindowPlugins.Create(cWindowId_PoleSlownik);
+  try
+    wP.Caption := 'Wybierz pole';
+
+    wP.IdColumns := 'id_pole_slownik';
+
+    wP.SqlSet('xps.id_pole_slownik, xps.nazwa, xpr.opis',
+      'xxx_dms_pole_slownik xps'
+      + ' join xxx_dms_pole_rodzaj xpr on xps.id_pole_rodzaj = xpr.id_pole_rodzaj',
+      '', '', '', '');
+
+    wP.AddFieldsXXX('xxx_dms_pole_slownik', 'id_pole_slownik', 'id_pole_slownik', 'xps');
+    wP.LastField.Visible := False;
+
+    wP.AddFieldsXXX('xxx_dms_pole_slownik', 'nazwa', 'Pole', 'xps');
+    wP.AddFieldsXXX('xxx_dms_pole_rodzaj', 'opis', 'Opis', 'xpr');
+
+    if wP.ShowWindow(wId) then
+      Result := wP.getIdValue;
+  finally
+    wP.Free
+  end;
+end;
+
+function PobIdPoleSlownikAnalityka: Integer;
+var
+  wP: TWindowPlugins;
+  wId: Integer;
+begin
+  Result := -1;
+  wP := TWindowPlugins.Create(cWindowId_PoleSlownikAnalityka);
+  try
+    wP.Caption := 'Wybierz słownik';
+
+    wP.IdColumns := 'id_analityka';
+
+    wP.SqlSet('a.id_analityka, a.nazwa',
+      'analityka a'
+      + ' join typpozycji_analityka z on a.id_analityka = z.id_analityka',
+      'z.id_typpozycji = 2', '', '', '');
+
+    wP.AddFields('analityka', 'id_analityka;nazwa', 'a');
+
+    if wP.ShowWindow(wId) then
+      Result := wP.getIdValue;
+  finally
+    wP.Free
+  end;
+end;
+
+function UstawRodzajPola(var ARodzajPola: Integer): Boolean;
+var
+  fRodzajPola: TForm;
+  pnlPola: TstPanel;
+  cbRodzajPola: TstComboBox;
+  pnlPrzyciski: TstPanel;
+  bbOK: TstBitBtn;
+  bbCancel: TstBitBtn;
+begin
+  Result := False;
+
+  fRodzajPola := TForm.Create(Application);
+  try
+    fRodzajPola.Name := 'fRodzajPola';
+    fRodzajPola.BorderStyle := bsDialog;
+    fRodzajPola.Caption := 'Wybierz rodzaj pola';
+    fRodzajPola.ClientHeight := 80;
+    fRodzajPola.ClientWidth := 300;
+    fRodzajPola.OldCreateOrder := False;
+    fRodzajPola.Position := poOwnerFormCenter;
+    fRodzajPola.PixelsPerInch := 96;
+
+    pnlPola := TstPanel.Create(fRodzajPola);
+    pnlPola.Name := 'pnlPola';
+    pnlPola.Parent := fRodzajPola;
+    pnlPola.Caption := '';
+    pnlPola.Align := alClient;
+    pnlPola.TabOrder := 0;
+
+    cbRodzajPola := TstComboBox.Create(fRodzajPola);
+    cbRodzajPola.Name := 'cbRodzajPola';
+    cbRodzajPola.Left := 8;
+    cbRodzajPola.Top := 8;
+    cbRodzajPola.Width := 281;
+    cbRodzajPola.Height := 0;
+    cbRodzajPola.Parent := pnlPola;
+
+    cbRodzajPola.AddInt('Wymagane', 0);
+    cbRodzajPola.AddInt('Blokowane', 1);
+
+    cbRodzajPola.ItemIndex := TstStringList(cbRodzajPola.Items).GetPozFromInt(ARodzajPola);
+    if (cbRodzajPola.ItemIndex < 0) then
+      cbRodzajPola.ItemIndex := 0;
+
+    pnlPrzyciski := TstPanel.Create(fRodzajPola);
+    pnlPrzyciski.Name := 'pnlPrzyciski';
+    pnlPrzyciski.Parent := fRodzajPola;
+    pnlPrzyciski.Caption := '';
+    pnlPrzyciski.Height := 43;
+    pnlPrzyciski.Align := alBottom;
+    pnlPrzyciski.TabOrder := 1;
+
+    bbOK := TstBitBtn.Create(fRodzajPola);
+    bbOK.Name := 'bbOK';
+    bbOK.Parent := pnlPrzyciski;
+    bbOK.Left := 126;
+    bbOK.Top := 8;
+    bbOK.Width := 75;
+    bbOK.Height := 25;
+    bbOK.Caption := 'Zatwierdź';
+    bbOK.ModalResult := 1;
+    bbOK.TabOrder := 0;
+    bbOK.Default := True;
+
+    bbCancel := TstBitBtn.Create(fRodzajPola);
+    bbCancel.Name := 'bbCancel';
+    bbCancel.Parent := pnlPrzyciski;
+    bbCancel.Left := 214;
+    bbCancel.Top := 8;
+    bbCancel.Width := 75;
+    bbCancel.Height := 25;
+    bbCancel.Caption := 'Anuluj';
+    bbCancel.Cancel := True;
+    bbCancel.ModalResult := 2;
+    bbCancel.TabOrder := 1;
+
+    if (fRodzajPola.ShowModal = 1) then
+    begin
+      ARodzajPola := cbRodzajPola.IntIndex;
+      Result := True;
+    end;
+  finally
+    fRodzajPola.Free;
+  end;
+end;
+
+procedure DodajPole;
+var
+  vIdPoleSlownik: Integer;
+  vIdPoleRodzaj: Integer;
+  vIdPoleSlownikAnalityka: Integer;
+  vIdEtapAkceptPole: Integer;
+  vIdAnalityka: string;
+  vRodzajPola: Integer;
+  vWymagane: string;
+  vBlokowane: string;
+  vField: TField;
+  vSql: string;
+begin
+  vIdPoleSlownik := PobIdPoleSlownik;
+  if (vIdPoleSlownik < 0) then Exit;
+
+  vSql := 'select id_pole_rodzaj'
+       + ' from xxx_dms_pole_slownik'
+       + ' where id_pole_slownik = ' + IntToStr(vIdPoleSlownik);
+
+  vIdPoleRodzaj := StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), -1);
+  if (vIdPoleRodzaj < 0) then Exit;
+
+  if (vIdPoleRodzaj <> cIdPoleRodzaj_SlownikNaPozycji) then
+  begin
+    //wszystkie bez slownikow;
+    vField := Transaction.PodajzQuery('ID_ETAPAKCEPT_POLE',
+      'XXX_DMS_ETAPAKCEPT_POLE',
+      'ID_ETAPAKCEPT = ' + TstQuery(fEtapAkceptEd.DS_EtapAkcept.DataSet).FieldByName('ID_ETAPAKCEPT').AsString
+      + ' and ID_POLE_SLOWNIK = ' + IntToStr(vIdPoleSlownik)
+      , '', '', '', '', '', '');
+
+    vIdEtapAkceptPole := vField.AsInteger;
+    if (vIdEtapAkceptPole > 0) then
+    begin
+      qPolaWymaganeBlokowane.Locate('id_etapakcept_pole', vIdEtapAkceptPole, []);
+      Inf('Pole zostało już dodane.', 100);
+      Exit;
+    end;
+
+    vIdAnalityka := 'null';
+  end else
+  begin
+    //slowniki;
+    vIdPoleSlownikAnalityka := PobIdPoleSlownikAnalityka;
+    if (vIdPoleSlownikAnalityka < 0) then Exit;
+
+    vField := Transaction.PodajzQuery('ID_ETAPAKCEPT_POLE',
+      'XXX_DMS_ETAPAKCEPT_POLE',
+      'ID_ETAPAKCEPT = ' + TstQuery(fEtapAkceptEd.DS_EtapAkcept.DataSet).FieldByName('ID_ETAPAKCEPT').AsString
+      + ' and ID_POLE_SLOWNIK = ' + IntToStr(vIdPoleSlownik)
+      + ' and ID_ANALITYKA = ' + IntToStr(vIdPoleSlownikAnalityka)
+      , '', '', '', '', '', '');
+
+    vIdEtapAkceptPole := vField.AsInteger;
+    if (vIdEtapAkceptPole > 0) then
+    begin
+      qPolaWymaganeBlokowane.Locate('id_etapakcept_pole', vIdEtapAkceptPole, []);
+      Inf('Pole z takim słownikiem zostało już dodane.', 100);
+      Exit;
+    end;
+
+    vIdAnalityka := IntToStr(vIdPoleSlownikAnalityka);
+  end;
+
+  vRodzajPola := 0;
+  if not UstawRodzajPola(vRodzajPola) then Exit;
+
+  vWymagane := '0';
+  vBlokowane := '0';
+
+  if (vRodzajPola = 0) then
+    vWymagane := '1';
+
+  if (vRodzajPola = 1) then
+    vBlokowane := '1';
+
+  vField := Transaction.PodajzQuery('gen_id(xxx_gen_dms_etapakcept_pole, 1)',
+    'rdb$database', '', '', '', '', '', '', '');
+    vIdEtapAkceptPole := vField.AsInteger;
+
+  vSql := 'insert into XXX_DMS_ETAPAKCEPT_POLE (ID_ETAPAKCEPT_POLE, ID_ETAPAKCEPT, ID_POLE_SLOWNIK, WYMAGANY, BLOKOWANY, ID_ANALITYKA)'
+       + ' values ('
+       + IntToStr(vIdEtapAkceptPole) + ', '
+       + TstQuery(fEtapAkceptEd.DS_EtapAkcept.DataSet).FieldByName('ID_ETAPAKCEPT').AsString + ', '
+       + IntToStr(vIdPoleSlownik) + ', '
+       + vWymagane + ', '
+       + vBlokowane + ', '
+       + vIdAnalityka + ')';
+  try
+    Transaction.WykonajSQL(vSql);
+  except
+    //Blad;
+  end;
+
+  qPolaWymaganeBlokowane.stClose('');
+  qPolaWymaganeBlokowane.stOpen('');
+  qPolaWymaganeBlokowane.Locate('id_etapakcept_pole', vIdEtapAkceptPole, []);
+end;
+
+procedure EdytujPole;
+var
+  vIdEtapAkceptPole: Integer;
+  vRodzajPola: Integer;
+  vWymagane: string;
+  vBlokowane: string;
+  vSql: string;
+begin
+  if not qPolaWymaganeBlokowane.FieldByName('id_etapakcept_pole').IsNull then
+  begin
+    vIdEtapAkceptPole := qPolaWymaganeBlokowane.FieldByName('id_etapakcept_pole').AsInteger;
+
+    vRodzajPola := 0;
+    if (qPolaWymaganeBlokowane.FieldByName('wymagany').AsInteger > 0) then
+      vRodzajPola := 0
+    else if (qPolaWymaganeBlokowane.FieldByName('blokowany').AsInteger > 0) then
+      vRodzajPola := 1;
+
+    if not UstawRodzajPola(vRodzajPola) then Exit;
+
+    vWymagane := '0';
+    vBlokowane := '0';
+
+    if (vRodzajPola = 0) then
+      vWymagane := '1';
+
+    if (vRodzajPola = 1) then
+      vBlokowane := '1';
+
+    vSql := 'update xxx_dms_etapakcept_pole'
+         + ' set wymagany = ' + vWymagane + ', '
+         + ' blokowany = ' + vBlokowane
+         + ' where id_etapakcept_pole = ' + IntToStr(vIdEtapAkceptPole);
+    try
+      Transaction.WykonajSQL(vSql);
+    except
+      //Blad;
+    end;
+
+    qPolaWymaganeBlokowane.stClose('');
+    qPolaWymaganeBlokowane.stOpen('');
+    qPolaWymaganeBlokowane.Locate('id_etapakcept_pole', vIdEtapAkceptPole, []);
+  end;
+end;
+
+procedure UsunPole;
+var
+  vSql: string;
+begin
+  if not qPolaWymaganeBlokowane.FieldByName('id_etapakcept_pole').IsNull then
+  begin
+    if not PytTN('Czy usunąć pole ?', 100) then Exit;
+
+    vSql := 'delete from XXX_DMS_ETAPAKCEPT_POLE'
+         + ' where id_etapakcept_pole = ' + qPolaWymaganeBlokowane.FieldByName('id_etapakcept_pole').AsString;
+    try
+      Transaction.WykonajSQL(vSql);
+    except
+      //Blad;
+    end;
+
+    qPolaWymaganeBlokowane.stClose('');
+    qPolaWymaganeBlokowane.stOpen('');
+  end;
+end;
+
+procedure ZmienSlownikPola;
+var
+  vIdEtapAkceptPole: Integer;
+  vIdPoleSlownik: Integer;
+  vIdPoleSlownikAnalityka: Integer;
+  vField: TField;
+  vSql: string;
+begin
+  if not qPolaWymaganeBlokowane.FieldByName('id_etapakcept_pole').IsNull then
+  begin
+    if (qPolaWymaganeBlokowane.FieldByName('id_pole_rodzaj').AsInteger <> cIdPoleRodzaj_SlownikNaPozycji) then
+    begin
+      Inf('Opcja dostępna tylko dla pola typu słownik na pozycji.', 100);
+      Exit;
+    end;
+
+    vIdEtapAkceptPole := qPolaWymaganeBlokowane.FieldByName('id_etapakcept_pole').AsInteger;
+    vIdPoleSlownik := qPolaWymaganeBlokowane.FieldByName('id_pole_slownik').AsInteger;
+
+    vIdPoleSlownikAnalityka := PobIdPoleSlownikAnalityka;
+    if (vIdPoleSlownikAnalityka < 0) then Exit;
+
+    vField := Transaction.PodajzQuery('ID_ETAPAKCEPT_POLE',
+      'XXX_DMS_ETAPAKCEPT_POLE',
+      'ID_ETAPAKCEPT = ' + TstQuery(fEtapAkceptEd.DS_EtapAkcept.DataSet).FieldByName('ID_ETAPAKCEPT').AsString
+      + ' and ID_POLE_SLOWNIK = ' + IntToStr(vIdPoleSlownik)
+      + ' and ID_ANALITYKA = ' + IntToStr(vIdPoleSlownikAnalityka)
+      + ' and ID_ETAPAKCEPT_POLE <> ' + IntToStr(vIdEtapAkceptPole)
+      , '', '', '', '', '', '');
+
+    if (vField.AsInteger > 0) then
+    begin
+      qPolaWymaganeBlokowane.Locate('id_etapakcept_pole', vField.AsInteger, []);
+      Inf('Pole z takim słownikiem zostało już dodane.', 100);
+      Exit;
+    end;
+
+    vSql := 'update xxx_dms_etapakcept_pole'
+         + ' set id_analityka = ' + IntToStr(vIdPoleSlownikAnalityka)
+         + ' where id_etapakcept_pole = ' + IntToStr(vIdEtapAkceptPole);
+    try
+      Transaction.WykonajSQL(vSql);
+    except
+      //Blad;
+    end;
+
+    qPolaWymaganeBlokowane.stClose('');
+    qPolaWymaganeBlokowane.stOpen('');
+    qPolaWymaganeBlokowane.Locate('id_etapakcept_pole', vIdEtapAkceptPole, []);
+  end;
+end;
+
+procedure stEditBtnsPolaWymaganeBlokowane_OnEditButtonClick(Sender: TObject; ABtnType: TstEditBtnType; AKlawisz: Tklawisz);
+begin
+  if (ABtnType = ebtDodaj) then
+  begin
+    DodajPole;
+  end;
+
+  if (ABtnType = ebtPopraw) then
+  begin
+    EdytujPole;
+  end;
+
+  if (ABtnType = ebtUsun) then
+  begin
+    UsunPole;
+  end;
+
+  if (ABtnType = ebtCustom1) then
+  begin
+    ZmienSlownikPola;
+  end;
+end;
+
+procedure UstawEditBtnsPolaWymaganeBlokowaneHint;
+var
+  i: integer;
+  vButton: TstEditButton;
+begin
+  for i := 0 to stEditBtnsPolaWymaganeBlokowane.ControlCount - 1 do
+  begin
+    if (stEditBtnsPolaWymaganeBlokowane.Controls[i] is TstEditButton) then
+    begin
+      vButton := TstEditButton(stEditBtnsPolaWymaganeBlokowane.Controls[i]);
+
+      if (vButton.BtnType = ebtDodaj) then
+        vButton.Hint := 'Dodaj';
+
+      if (vButton.BtnType = ebtPopraw) then
+        vButton.Hint := 'Popraw';
+
+      if (vButton.BtnType = ebtUsun) then
+        vButton.Hint := 'Usuń';
+    end;
+  end;
+end;
+
+procedure UstawEditBtnsPolaWymaganeBlokowaneImage;
+var
+  i: integer;
+  vButton: TstEditButton;
+begin
+  for i := 0 to stEditBtnsPolaWymaganeBlokowane.ControlCount - 1 do
+  begin
+    if (stEditBtnsPolaWymaganeBlokowane.Controls[i] is TstEditButton) then
+    begin
+      vButton := TstEditButton(stEditBtnsPolaWymaganeBlokowane.Controls[i]);
+
+      if (vButton.BtnType = ebtCustom1) then
+        vButton.RepoName := 'atribute_24';
+    end;
+  end;
+end;
+
+procedure DodajZakladkePozycje;
+var
+  tsPolaWymaganeBlokowane: TTabSheet;
+  sepPolaWymaganeBlokowane: TstSeparator;
+  pnlPolaWymaganeBlokowaneGrid: TstPanel;
+  pnlPolaWymaganeBlokowaneBottom: TstPanel;
+  pnlPolaWymaganeBlokowaneBottomEditBtns: TstPanel;
+begin
+  tsPolaWymaganeBlokowane := fEtapAkceptEd.PC_Main.CreateTabSheet('tsPolaWymaganeBlokowane');
+  tsPolaWymaganeBlokowane.Name := 'tsPolaWymaganeBlokowane';
+  tsPolaWymaganeBlokowane.Caption := '&5 Pola wymagane i blokowane';
+  tsPolaWymaganeBlokowane.PageControl := fEtapAkceptEd.PC_Main;
+  tsPolaWymaganeBlokowane.PageIndex := 4;
+
+  sepPolaWymaganeBlokowane := TstSeparator.Create(tsPolaWymaganeBlokowane.Owner);
+  sepPolaWymaganeBlokowane.Name := 'sepPolaWymaganeBlokowane';
+  sepPolaWymaganeBlokowane.Parent := tsPolaWymaganeBlokowane;
+  sepPolaWymaganeBlokowane.Caption := 'Pola wymagane i blokowane';
+  sepPolaWymaganeBlokowane.Left := 10;
+  sepPolaWymaganeBlokowane.Top := 10;
+  sepPolaWymaganeBlokowane.Width := 400;
+  sepPolaWymaganeBlokowane.Style := ssWin10Big;
+
+  pnlPolaWymaganeBlokowaneGrid := AddPanel(tsPolaWymaganeBlokowane.Owner, 'pnlPolaWymaganeBlokowaneGrid',
+    tsPolaWymaganeBlokowane, 20, 38, tsPolaWymaganeBlokowane.Width - 40, tsPolaWymaganeBlokowane.Height - 91, alNone);
+  pnlPolaWymaganeBlokowaneGrid.BevelOuter := bvNone;
+  pnlPolaWymaganeBlokowaneGrid.Anchors := [akLeft, akTop, akRight, akBottom];
+
+  dbgPolaWymaganeBlokowane := TKrDBGrid.Create(Self);
+  dbgPolaWymaganeBlokowane.Name := 'dbgPolaWymaganeBlokowane';
+  dbgPolaWymaganeBlokowane.Parent := pnlPolaWymaganeBlokowaneGrid;
+  dbgPolaWymaganeBlokowane.Align := alClient;
+  dbgPolaWymaganeBlokowane.ReadOnly := True;
+  dbgPolaWymaganeBlokowane.TitleFont.Name := 'Segoe UI';
+  dbgPolaWymaganeBlokowane.TitleFont.Color := 3355443;
+  dbgPolaWymaganeBlokowane.TitleFont.Height := -11;
+  dbgPolaWymaganeBlokowane.TitleFont.Style := [fsBold];
+
+  with dbgPolaWymaganeBlokowane.Columns.Add do
+  begin
+    Expanded := False;
+    FieldName := 'nazwa';
+    Title.Caption := 'Pole';
+    Width := 200;
+  end;
+  with dbgPolaWymaganeBlokowane.Columns.Add do
+  begin
+    Expanded := False;
+    FieldName := 'opis';
+    Title.Caption := 'Opis';
+    Width := 200;
+  end;
+  with dbgPolaWymaganeBlokowane.Columns.Add do
+  begin
+    Expanded := False;
+    FieldName := 'analityka';
+    Title.Caption := 'Słownik';
+    Width := 200;
+  end;
+  with dbgPolaWymaganeBlokowane.Columns.Add do
+  begin
+    Expanded := False;
+    FieldName := 'wymagany_str';
+    Title.Caption := 'Wymagany';
+    Width := 100;
+  end;
+  with dbgPolaWymaganeBlokowane.Columns.Add do
+  begin
+    Expanded := False;
+    FieldName := 'blokowany_str';
+    Title.Caption := 'Blokowany';
+    Width := 100;
+  end;
+
+  qPolaWymaganeBlokowane := TstQuery.Create(Self);
+  dsPolaWymaganeBlokowane := TDataSource.Create(Self);
+
+  pnlPolaWymaganeBlokowaneBottom := AddPanel(tsPolaWymaganeBlokowane.Owner, 'pnlPolaWymaganeBlokowaneBottom',
+    tsPolaWymaganeBlokowane, 20, tsPolaWymaganeBlokowane.Height - 50, tsPolaWymaganeBlokowane.Width - 40, 33, alNone);
+  pnlPolaWymaganeBlokowaneBottom.BevelOuter := bvNone;
+  pnlPolaWymaganeBlokowaneBottom.Anchors := [akLeft, akRight, akBottom];
+
+  pnlPolaWymaganeBlokowaneBottomEditBtns := AddPanel(tsPolaWymaganeBlokowane.Owner, 'pnlPolaWymaganeBlokowaneBottomEditBtns',
+    pnlPolaWymaganeBlokowaneBottom, 0, 0, 152, 0, alRight);
+  pnlPolaWymaganeBlokowaneBottomEditBtns.BevelOuter := bvNone;
+
+  stEditBtnsPolaWymaganeBlokowane := TstEditBtns.Create(tsPolaWymaganeBlokowane.Owner);
+  stEditBtnsPolaWymaganeBlokowane.Name := 'stEditBtnsPolaWymaganeBlokowane';
+  stEditBtnsPolaWymaganeBlokowane.Parent := pnlPolaWymaganeBlokowaneBottomEditBtns;
+  stEditBtnsPolaWymaganeBlokowane.Align := alTop;
+  stEditBtnsPolaWymaganeBlokowane.Buttons := [ebtDodaj, ebtPopraw, ebtUsun, ebtCustom1];
+  stEditBtnsPolaWymaganeBlokowane.Custom1Hint := 'Zmień słownik';
+  stEditBtnsPolaWymaganeBlokowane.Custom1ButtonOrder := 4;
+  stEditBtnsPolaWymaganeBlokowane.OnEditButtonClick := @stEditBtnsPolaWymaganeBlokowane_OnEditButtonClick;
+  UstawEditBtnsPolaWymaganeBlokowaneHint;
+  UstawEditBtnsPolaWymaganeBlokowaneImage;
+end;
+
+procedure UstawDostepnoscPolaWymaganeBlokowane;
+begin
+  stEditBtnsPolaWymaganeBlokowane.DisabledButtons := [];
+  if not ((fEtapAkceptEd.klEdycji = F3) or (fEtapAkceptEd.klEdycji = F5)) then
+    stEditBtnsPolaWymaganeBlokowane.DisabledButtons := [ebtDodaj, ebtPopraw, ebtUsun, ebtCustom1];
+end;
+
+procedure WczytajPolaWymaganeBlokowane;
+begin
+  qPolaWymaganeBlokowane.Database := Transaction.DefaultDatabase;
+  qPolaWymaganeBlokowane.Transaction := TFIBTransaction(Transaction);
+
+  qPolaWymaganeBlokowane.SqlSelect := 'xep.id_etapakcept_pole, xep.id_etapakcept, xep.id_pole_slownik, xps.nazwa, xps.id_pole_rodzaj, '
+                   + 'xpr.opis, xep.wymagany, xep.blokowany, xep.id_analityka, a.nazwa as analityka,'
+                   + 'case when xep.wymagany > 0 then ' + QuotedStr('Tak') + ' else ' + QuotedStr('Nie') + ' end wymagany_str,'
+                   + 'case when xep.blokowany > 0 then ' + QuotedStr('Tak') + ' else ' + QuotedStr('Nie') + ' end blokowany_str';
+  qPolaWymaganeBlokowane.SqlFrom := 'xxx_dms_etapakcept_pole xep'
+                 + ' join xxx_dms_pole_slownik xps on xep.id_pole_slownik = xps.id_pole_slownik'
+                 + ' join xxx_dms_pole_rodzaj xpr on xps.id_pole_rodzaj = xpr.id_pole_rodzaj'
+                 + ' left join analityka a on xep.id_analityka = a.id_analityka';
+  qPolaWymaganeBlokowane.SqlWhereProg := 'xep.id_etapakcept = ' + TstQuery(fEtapAkceptEd.DS_EtapAkcept.DataSet).FieldByName('ID_ETAPAKCEPT').AsString;
+  qPolaWymaganeBlokowane.SqlOrderBy := 'xps.nazwa, a.nazwa';
+
+  qPolaWymaganeBlokowane.stPrepare('');
+  qPolaWymaganeBlokowane.stOpen('');
+
+  dsPolaWymaganeBlokowane.DataSet := TDataSet(qPolaWymaganeBlokowane);
+  dbgPolaWymaganeBlokowane.DataSource := dsPolaWymaganeBlokowane;
+end;
+
+procedure FormClose(Sender: TObject; var Action: TCloseAction);
+begin
+  fEtapAkceptEd.FormClose(Sender, Action);
+
+  if (Action <> caNone) then
+    if not (fEtapAkceptEd.ModalResult = mrOK) then
+      Transaction.WykonajSQL('rollback to z');
+end;
+
+procedure UstawSzablon;
+var
+  vSql: string;
+begin
+  vSql := 'select sa.szablon'
+       + ' from etapakcept ea'
+       + ' join sciezkaakcept sa on ea.id_sciezkaakcept = sa.id_sciezkaakcept'
+       + ' where ea.id_etapakcept = ' + TstQuery(fEtapAkceptEd.DS_EtapAkcept.DataSet).FieldByName('ID_ETAPAKCEPT').AsString;
+
+  Szablon := (StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), 0) > 0);
+end;
+
+begin
+  if (Self is TfEtapAkceptEd) then
+  begin
+    if (fEtapAkceptEd = nil) then
+    begin
+      fEtapAkceptEd := TfEtapAkceptEd(Self);
+
+      fEtapAkceptEd.ClientWidth := 1024;
+
+      UstawSzablon;
+
+      if Szablon then
+      begin
+        DodajZakladkePozycje;
+
+        fEtapAkceptEd.OnClose := @FormClose;
+      end;
+    end;
+
+    if Szablon then
+    begin
+      UstawDostepnoscPolaWymaganeBlokowane;
+
+      Transaction := TstTransaction(TstQuery(fEtapAkceptEd.DS_EtapAkcept.DataSet).Transaction);
+      Transaction.WykonajSQL('savepoint z');
+
+      WczytajPolaWymaganeBlokowane;
+    end;
+  end;
+end.

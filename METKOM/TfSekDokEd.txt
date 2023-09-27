@@ -1,0 +1,66 @@
+                                             //TfSekDok
+//------------------------------------------------------------------------------
+//2021-03-09 MS - DMS - obsługa dyspozycji blokady przelewu - grupowa zmiana Dyspozycji na dokumencie DMS
+//                - metoda ZmienDyspozycje();
+//                - metoda DodajWartosciSqlDoCombo()
+//------------------------------------------------------------------------------
+
+
+
+{$ADDTYPE TZakresMinMax}
+{$ADDTYPE TFCzytajCos}
+{$ADDTYPE TMenuItem}
+{$ADDTYPE TstPopupMenu}
+{$ADDTYPE TSekDokSQLMaker}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TstXPageControl}
+{$ADDTYPE TfWindowPlugins}
+{$ADDTYPE TWindowPlugins}
+{$ADDTYPE TKrDBGrid}
+{$ADDTYPE TfSekDok}
+{$ADDTYPE TfSekDokEd}
+{$ADDTYPE TField}
+{$ADDTYPE TfPostepOp}
+{$ADDTYPE TDMSekDok}
+{$ADDTYPE TString}
+{$ADDTYPE TDataSet}
+
+
+var
+  fSekDoked: TfSekDokEd;
+  fSekDoked2: TfSekDok;
+  field: TstEdit;
+
+const
+  sLineBreak = #13#10;
+
+
+
+
+procedure OnChangeJednostka(Sender : TObject);
+var
+ vSql: string;
+ nowaJednostka: string;
+begin
+
+  vSql := 'select * from XXX_GET_JEDNOSTKA(''' + fSekDokEd.E_JednOrg.Text + ''')';
+  nowaJednostka := GetFromQuerySQL(vSql, 0);
+  if(nowaJednostka ='') then exit;
+  fSekDokEd.E_JednOrg.Text :=nowaJednostka;
+end;
+
+
+//------------------------------------------------------------------------------
+begin
+//DebugClassStr('TfSekDokEd')
+  if (Self is TfSekDokEd) then
+  begin
+    if (fSekDokEd = nil) then
+    begin
+         fSekDokEd := TfSekDokEd(Self);
+         fSekDokEd.E_JednOrg.OnChange:= @OnChangeJednostka;
+    end;
+     OnChangeJednostka(nil);
+
+  end;
+end.

@@ -1,0 +1,136 @@
+
+//okno TfDokZamowieniaOdOdb
+{$ADDTYPE TfDokZamowieniaOdOdb}
+{$ADDTYPE TKrDbGrid}
+
+function GenZam(Parent : HWND; Baza : PChar; PlikExcelPath : PChar; PlikExcel : PChar; idurz : PChar) : integer;
+         external 'GenZam@\\192.168.1.201\shared_st\plugins\BMSXlsToZam\BMSXlsToZam.dll stdcall';
+         //external 'GenZam@e:\BMSXlsToZam.dll stdcall';
+
+//PR 04.07.2023
+function GenZamNowaWerwsja(Parent : HWND; Baza : PChar; PlikExcelPath : PChar; PlikExcel : PChar; idurz : PChar) : integer;
+      external 'GenZam@\\192.168.1.201\shared_st\plugins\BMSXlsToZamNowaWersjaBazaProdukcyjna\BMSXlsToZam.dll stdcall';
+
+const
+   b_pokazuj_komunikaty = false;//false true
+   i_od_priorytetu = 1;
+   LN = #13#10;
+   TAB  = #9;
+
+var
+   frm : TfDokZamowieniaOdOdb;
+   IdUzytkownik : integer;
+   path : string; //\\192.168.1.201\shared_st\plugins\
+
+procedure inff(sTrescKomunik: string; iPriorytet: integer);
+begin
+   if ((GetUser <> 'SRWP') and (GetUser <> 'SRW')) then exit;
+   if (b_pokazuj_komunikaty) then
+      if (iPriorytet >= i_od_priorytetu) then
+         inf(sTrescKomunik, 100);
+end;
+
+procedure GetSharedPath;
+var
+   BazaSet : TIniFile;
+begin
+   BazaSet := TIniFile.Create(ExtractFilePath(Application.ExeName ) +'baza.set');
+   try
+      path :=  BazaSet.ReadString('MAIN','SHARED_DIR','') ;
+   finally
+      Bazaset.Free;
+   end;
+   path := path + '\plugins\';
+end;
+
+function PobIdUzytk : Boolean;
+var
+   vId : string;
+begin
+   result := false;
+   IdUzytkownik := -1;
+   vId := Trim(GetFromQuerySQL('SELECT ID_UZYTKOWNIK FROM uzytkownik WHERE login = ' + #39 + GetUser + #39, 1));
+   if length(vId) > 0 then
+   begin
+      IdUzytkownik := StrToInt(vId);
+      result := true;
+   end else
+      inf('Błąd przy określaniu użytkownika.', 100);
+end;
+
+procedure GenerujZamowienie(sender : TObject);
+var
+  sPlik : string;
+  odOpenDialog: TOpenDialog;
+  iResult : Integer;
+begin
+  Application.ProcessMessages
+  sPlik := '';
+  odOpenDialog := TOpenDialog.Create(nil);
+  try
+    odOpenDialog.DefaultExt := '*.xls;*.xlsx';
+    odOpenDialog.Filter := 'Pliki programu Excel (*.xls;*.xlsx)|*.xls;*.xlsx';
+    odOpenDialog.Options := [ofHideReadOnly, ofPathMustExist, ofFileMustExist, ofEnableSizing];
+    odOpenDialog.Title := 'Wybierz plik';
+    if odOpenDialog.Execute then
+      sPlik := odOpenDialog.FileName;
+  finally
+    odOpenDialog.Free;
+  end;
+  if length(trim(sPlik)) = 0 then Exit;
+  Application.ProcessMessages;
+
+  iResult := GenZam(Self.Handle, PChar(GetFirm), PChar(sPlik), PChar(ExtractFileName(sPlik)), PChar('a'+inttostr(IdUzytkownik)) );
+  inff(inttostr(iResult), 1);
+  frm.DBGmain.DataSource.DataSet.CLOSE;
+  frm.DBGmain.DataSource.DataSet.OPEN;
+end;
+
+//PR 04.07.2023
+procedure GenerujNowaWersjeZamowienie(sender : TObject);
+var
+  sPlik : string;
+  odOpenDialog: TOpenDialog;
+  iResult : Integer;
+begin
+  Application.ProcessMessages
+  sPlik := '';
+  odOpenDialog := TOpenDialog.Create(nil);
+  try
+    odOpenDialog.DefaultExt := '*.xls;*.xlsx';
+    odOpenDialog.Filter := 'Pliki programu Excel (*.xls;*.xlsx)|*.xls;*.xlsx';
+    odOpenDialog.Options := [ofHideReadOnly, ofPathMustExist, ofFileMustExist, ofEnableSizing];
+    odOpenDialog.Title := 'Wybierz plik';
+    if odOpenDialog.Execute then
+      sPlik := odOpenDialog.FileName;
+  finally
+    odOpenDialog.Free;
+  end;
+  if length(trim(sPlik)) = 0 then Exit;
+  Application.ProcessMessages;
+
+  iResult := GenZamNowaWerwsja(Self.Handle, PChar(GetFirm), PChar(sPlik), PChar(ExtractFileName(sPlik)), PChar('a'+inttostr(IdUzytkownik)) );
+  inff(inttostr(iResult), 1);
+  frm.DBGmain.DataSource.DataSet.CLOSE;
+  frm.DBGmain.DataSource.DataSet.OPEN;
+end;
+
+begin
+   if (self is TfDokZamowieniaOdOdb) then
+   begin
+      if (frm = nil) then
+      begin
+         frm := (self as TfDokZamowieniaOdOdb);
+         if (frm <> nil) then
+         begin
+            GetSharedPath;
+            if not PobIdUzytk then exit;
+            PluginsAddAction(self, 'Generuj zamówienie', 'MS-Office-2003-Excel-icon', @GenerujZamowienie);
+            //PR 04.07.2023
+            PluginsAddAction(self, 'Generuj zamówienie nowa wersja', 'application_modules_24', @GenerujNowaWersjeZamowienie);
+            //PluginsAddAction(self, 'Generuj zamówienie', path+'BMSXlsToZam\generate.bmp', @GenerujZamowienie);
+            //PluginsAddAction(self, 'Generuj zamówienie', 'e:\generate.bmp', @GenerujZamowienie);
+         end;
+      end;
+   end;
+end.
