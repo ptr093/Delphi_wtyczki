@@ -1,0 +1,13 @@
+
+begin
+
+
+     if not (self is TFDokDyspozycjaMagEd) then exit;
+      frm := TFDokDyspozycjaMagEd(self);
+  
+
+  {frm.P_PozDysp_left.ParentColor := False;
+  frm.P_PozDysp_left.ParentBackground := False;
+  frm.P_PozDysp_left.Color := clBlack;
+  
+end.

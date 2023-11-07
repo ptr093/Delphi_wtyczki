@@ -1,0 +1,74 @@
+//TfZleceniaWewnetrzneEd
+
+{$ADDTYPE TfZleceniaWewnetrzneEd}
+
+var
+  frm : TfZleceniaWewnetrzneEd;
+
+procedure onZapisz(Sender: TOBject);
+var
+  sql, id_rokkal, nrzlec : string;
+  iRes : integer;
+begin
+
+  if (GetFromQuerySQL('select count(*) from ZLECPROD where id_zlecprod='+frm.DS_ZlecProd.DataSet.FIELDBYNAME('ID_ZLECPROD').ASSTRING,0)='0') then //jeśli nowe zlecenie
+  begin
+    nrzlec:='';
+    sql:='INSERT INTO ZLECPROD (ID_ZLECPROD, ID_ZLEC, ID_UZYTKOWNIK, ID_PRODUKT, ID_POZ, ID_ROKKAL, DATAZLEC, DATADOPROD, '+
+         ' DATADOPRODPLAN, RODZAJZLEC, ILOSC, NRPARTII, UWAGI, JESTUWAGA, NRZLEC, NRDOKZEW, OPIS, STATUS) VALUES ('+
+         frm.DS_ZlecProd.DataSet.FIELDBYNAME('ID_ZLECPROD').ASSTRING+',';
+    if (frm.DS_ZlecProd.DataSet.FIELDBYNAME('ID_ZLEC').ASSTRING<>'') then sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('ID_ZLEC').ASSTRING+','
+    else sql:=sql+'null,';
+    sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('ID_UZYTKOWNIK').ASSTRING+',';
+    sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('ID_PRODUKT').ASSTRING+',';
+    if (frm.DS_ZlecProd.DataSet.FIELDBYNAME('ID_POZ').ASSTRING<>'') then sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('ID_POZ').ASSTRING+','
+    else sql:=sql+'null,';
+    id_rokkal:=GetFromQuerySQL('SELECT ID_ROKKAL FROM ROKKAL WHERE (ROKKAL = '+QuotedStr(Copy(frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATAZLEC').ASSTRING,1,4))+')',0);
+    sql:=sql+id_rokkal+',';
+    sql:=sql+QuotedStr(frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATAZLEC').ASSTRING)+',';
+    if (frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATADOPROD').ASSTRING<>'') then sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATADOPROD').ASSTRING+','
+    else sql:=sql+'null,';
+    if (frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATADOPRODPLAN').ASSTRING<>'') then sql:=sql+QuotedStr(frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATADOPRODPLAN').ASSTRING)+','
+    else
+    begin
+      inf300('Proszę uzupełnić datę planowanej produkcji.');
+      Exit;
+    end;
+    if(frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATADOPRODPLAN').ASDATETIME <  frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATAZLEC').ASDATETIME)
+    then
+    begin
+        inf300('Nie mozna wystawić dokumentu z data wstecz!');
+        Exit;
+    end;
+
+    sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('RODZAJZLEC').ASSTRING+',';
+    sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('ILOSC').ASSTRING+',';
+    if (frm.DS_ZlecProd.DataSet.FIELDBYNAME('NRPARTII').ASSTRING<>'') then sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('NRPARTII').ASSTRING+','
+    else sql:=sql+'null,';
+    if (frm.DS_ZlecProd.DataSet.FIELDBYNAME('UWAGI').ASSTRING<>'') then sql:=sql+QuotedStr(frm.DS_ZlecProd.DataSet.FIELDBYNAME('UWAGI').ASSTRING)+','
+    else sql:=sql+'null,';
+    sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('JESTUWAGA').ASSTRING+',';
+    nrzlec:=GetFromQuerySQL('SELECT FIRST 1 Z.NRZLEC + 1 FROM ZLECPROD Z WHERE Z.ID_ROKKAL = '+id_rokkal+' AND Z.RODZAJZLEC = 0 ORDER BY 1 DESC',0);
+    sql:=sql+nrzlec+',';
+    sql:=sql+QuotedStr(nrzlec+'/'+Copy(frm.DS_ZlecProd.DataSet.FIELDBYNAME('DATAZLEC').ASSTRING,1,4))+',';
+    if (frm.DS_ZlecProd.DataSet.FIELDBYNAME('OPIS').ASSTRING<>'') then sql:=sql+QuotedStr(frm.DS_ZlecProd.DataSet.FIELDBYNAME('OPIS').ASSTRING)+','
+    else sql:=sql+'null,';;
+    sql:=sql+frm.DS_ZlecProd.DataSet.FIELDBYNAME('STATUS').ASSTRING+')';
+    iRes:=ExecuteSQL(sql,0);
+    if (iRes<>1) then inf300(string(GetLastApiError));
+    frm.Close;
+  end
+  else
+    frm.BBzapiszClick(Sender);
+end;
+
+begin
+  if (Self is TfZleceniaWewnetrzneEd) then
+  begin
+    if (frm = nil) then frm:=Self as TfZleceniaWewnetrzneEd;
+    if (frm <> nil) then
+    begin
+      frm.BBzapisz.OnClick:=@onZapisz;
+    end;
+  end;
+end.

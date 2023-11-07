@@ -1,0 +1,207 @@
+//TfDokGmEdV2
+{$ADDTYPE TobrDokGMPalec}
+{$AT TFIBTransaction}
+{$ADDTYPE TstTransaction}
+{$ADDTYPE TstQuery}
+{$Addtype TDataSource}
+{$ADDTYPE TfDokGmEdV2}
+
+const
+  cJmZastepczaDefault = 'kg';
+  cIdMagazyn = '10013';
+
+var
+  fDokGmEd: TfDokGmEdV2;
+  obrDokGMPalec: TobrDokGMPalec;
+  lblSumJednZastJM: TstLabel;
+  vSumIloscZastJM: Currency;
+  DS_OnDataChange: TDataChangeEvent;
+  vSql: string;
+
+type
+  TControlType = (ctPanel, ctLabel, ctQEdit, ctComboBox, ctBitBtn);
+
+function CreateControl(const AControlType: TControlType; const AOwner: TComponent; const AName: string;
+         const ALeft, ATop, AWidth, AHeight: Integer): TControl;
+begin
+  Result := nil;
+
+  case AControlType of
+    ctPanel: Result := TstPanel.Create(AOwner);
+    ctLabel: Result := TstLabel.Create(AOwner);
+    ctQEdit: Result := TQEdit.Create(AOwner);
+    ctComboBox: Result := TstComboBox.Create(AOwner);
+    ctBitBtn: Result := TstBitBtn.Create(AOwner);
+  end;
+
+  if (Result <> nil) then
+  begin
+    Result.Name := AName;
+    Result.Left := ALeft;
+    Result.Top := ATop;
+    Result.Width := AWidth;
+    Result.Height := AHeight;
+  end;
+end;
+
+function AddLabel(const AOwner: TComponent; const AName: string; const AParent: TWinControl;
+         const ALeft, ATop, AWidth, AHeight: Integer; const AAutoSize: Boolean; const ACaption: string): TstLabel;
+begin
+  Result := CreateControl(ctLabel, AOwner, AName, ALeft, ATop, AWidth, AHeight) as TstLabel;
+  Result.AutoSize := AAutoSize;
+  Result.Caption := ACaption;
+  Result.Parent := AParent;
+end;
+
+procedure SumIloscZastJM;
+var
+  vField: TField;
+
+begin
+  vSumIloscZastJM := 0;
+  vField := TstTransaction(TstQuery(fDokGmEd.DS_PozDok.DataSet).Transaction).PodajzQuery('SUM(ILOSCJMZAST)', 'POZ', 'ID_NAGL = ' + IntToStr(obrDokGMPalec.FAktID_Nagl) + ' and JMZASTEPCZA = ' + QuotedStr(cJmZastepczaDefault), '', '', '' ,'', '', '');
+
+  if (vField.ASCURRENCY <> 0) then
+  begin
+    vSumIloscZastJM := vField.ASCURRENCY;
+  end;
+
+  lblSumJednZastJM.Caption := 'Suma wg jm zast [ ' + cJmZastepczaDefault + ' ] - ' + CurrToStrSt(vSumIloscZastJM);
+  lblSumJednZastJM.Visible := true;
+  lblSumJednZastJM.Font.Color := clBlack;
+end;
+
+procedure DS_PozDok_OnDataChange(Sender: TObject; Field: TField);
+begin
+  if (DS_OnDataChange <> nil) then
+    DS_OnDataChange(Sender, Field);
+
+  SumIloscZastJM;
+end;
+
+
+procedure FormClose(Sender: TObject; var Action: TCloseAction);
+ var
+  vsql:string;
+  sql: string;
+  err: integer;
+  vDS: TDataSource;
+  vIdNagl: Integer;
+  vIdNaglPW: Integer;
+ begin         // fDokGmEd.ds_
+
+  if(fDokGmEd.FPluginRodzajEdycji <> 5) then exit;
+
+  vIdNagl := fDokGmEd.FPluginID_Nagl;
+  vsql := 'select distinct NL.ID_NAGL'
+        +' from NAGLSPRZ NS'
+        +' inner join NAGL NL on (NS.ID_NAGLCZYM = NL.ID_NAGL)'
+        +' inner join poz p on p.id_nagl = ns.id_naglco'
+        +' where (NS.ID_NAGLCO =' + IntToStr(vIdNagl)
+        +' and (select k.id_defdok from nagl k'
+        +' where k.id_nagl = ns.id_naglco)=10169)';
+
+  vIdNaglPW :=  (StrToIntDef(Trim(GetFromQuerySQL(vSql, 0)), 0));
+  if (vIdNaglPW =0) then exit;
+
+    //Usuwanie wszystkich pozycji oprocz pierwszej z dokumentu pw
+  vsql:= 'select id_poz from poz where lp > 1 and id_nagl= '+ intToStr(vIdNaglPW);
+  vDS := OpenQuerySQL(vsql, 0);
+
+  if(vds<>nil) then
+  begin
+    try
+      vDS.DataSet.First;
+      while not vDS.DataSet.Eof do
+    begin
+
+    sql := 'DELETE FROM poz where id_poz='+vDS.DataSet.FieldByName('id_poz').ASSTRING;
+    err := ExecuteSQL(sql, 0);
+    if(err = 0) then exit;
+    vDS.DataSet.Next;
+    end ;
+    finally
+      CloseQuerySQL(vDS);
+    end;
+     end;
+    //dodanie wszystkich pozycji do PW takie jak ma dokument RW
+
+      vsql:= 'select p.iloscjmzast, p.cenawenetto, p.bonif1poz, p.cenauzgzam, p.lp,'
+              +' p.stronapoz, p.wartwebrutto, p.jmzastepcza, n.id_waluta,n.kurs'
+              +' from poz  p'
+              +' join nagl n on n.id_nagl=p.id_nagl'
+              +' where p.lp > 1 and p.id_nagl= '+ intToStr(vIdNagl);
+      vDS:=nil;
+      vDS := OpenQuerySQL(vsql, 0);
+
+  if(vds=nil) then exit;
+    try
+      vDS.DataSet.First;
+      while not vDS.DataSet.Eof do
+    begin
+
+    sql := ' execute procedure xxx_POZ_ADD('+intToStr(vIdNaglPW)+',10003, 19866,'
+           +StringReplace(vDS.DataSet.FieldByName('iloscjmzast').ASSTRING,',','.',[rfReplaceAll, rfIgnoreCase]) +','+ vDS.DataSet.FieldByName('cenawenetto').ASSTRING
+           +','+vDS.DataSet.FieldByName('bonif1poz').ASSTRING+','+vDS.DataSet.FieldByName('cenauzgzam').ASSTRING
+           +','+vDS.DataSet.FieldByName('lp').ASSTRING+','+vDS.DataSet.FieldByName('stronapoz').ASSTRING
+           +','+vDS.DataSet.FieldByName('ID_WALUTA').ASSTRING+','+vDS.DataSet.FieldByName('KURS').ASSTRING
+           +',0,'+vDS.DataSet.FieldByName('wartwebrutto').ASSTRING+',0, 0,0,0)';
+
+    err := ExecuteSQL(sql, 0);
+    if(err = 0) then exit;
+    vDS.DataSet.Next;
+    end ;
+    finally
+      CloseQuerySQL(vDS);
+    end;
+
+
+
+  fDokGmEd.FormClose(Sender, Action);
+end;
+
+
+
+
+begin
+  if (Self is TfDokGmEdV2) then
+  begin
+    if (fDokGmEd = nil) then
+    begin
+      fDokGmEd := TfDokGmEdV2(Self);
+      obrDokGMPalec := TobrDokGMPalec(fDokGmEd.FObrDokGm);
+    end;
+//Moja funkcja dodana
+    fDokGmEd.OnClose:=@FormClose;
+
+
+    if (fDokGmEd <> nil) then
+    begin
+      if (Self.FindComponent('Lbl_SumIloscJednZast') <> nil) then
+      begin
+        lblSumJednZastJM.Visible := false;
+      end;
+      if (fDokGmEd.FPluginID_DefDok = 10169) then
+      begin
+        vSql := 'select id_magazyn from nagl where id_nagl = ' + IntToStr(fDokGmEd.FPluginID_Nagl);
+
+        if (GetFromQuerySQL(vSql, 0) = cIdMagazyn) then
+        begin
+          SetGlobalData('ROZCH_WEW_ODPAD', 1);
+          if (Self.FindComponent('Lbl_SumIloscJednZast') = nil) then
+          begin
+            lblSumJednZastJM := AddLabel(Self, 'Lbl_SumIloscJednZast', fDokGmEd.P_Gora, fDokGmEd.P_Gora.Width - 260, 172, 80, 45, true, '');
+            lblSumJednZastJM.Font.Size := lblSumJednZastJM.Font.Size + 5;
+            fDokGmEd.P_GoraPrawo.Top := fDokGmEd.P_GoraPrawo.Top - 5;
+            lblSumJednZastJM.Anchors := [akRight];
+            DS_OnDataChange := fDokGmEd.DS_PozDok.OnDataChange;
+            fDokGmEd.DS_PozDok.OnDataChange := @DS_PozDok_OnDataChange;
+          end;
+          SumIloscZastJM;
+        end;
+      end
+      else
+        SetGlobalData('ROZCH_WEW_ODPAD', 0);
+    end;
+  end;
+end.
