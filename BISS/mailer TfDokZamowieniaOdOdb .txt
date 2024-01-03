@@ -1,0 +1,442 @@
+                                                                                             //TfDokZamowieniaOdOdb
+{$AT TPrinter}
+{$ADDTYPE TfDokZamowieniaOdOdb}
+{$ADDTYPE TstQuery}
+{$ADDTYPE TstPopupMenu}
+{$ADDTYPE TKrDBGrid}
+{$AT TDotNetPrestiz}
+var
+  frm : TfDokZamowieniaOdOdb;
+
+
+  //AutoGenPdfWyslijEmail
+{$ADDTYPE TstStringList}
+{$ADDTYPE TReportParam}
+
+function WyslijMailDll(KatalogTemp: PChar; EmailList: PChar; ReplyTo: PChar): Integer;
+         external 'WyslijMailDll@D:\STREAM\PLUGINS\mailer\SendEmailDll.dll stdcall';
+
+var
+  LogStringList: TStringList;
+  PlikLog: string;
+  idNagl: integer;
+
+ const
+  cIdRaportRbListaPozycji = 10003;
+
+const
+  cKatalogLog = 'D:\STREAM\PLUGINS\MAILER\log\';
+  cStopkaHtml = 'D:\STREAM\PLUGINS\MAILER\stopka.html';
+  cFolderDrukuj='C:\Users\streamsoft3\Desktop\test2\';
+
+const
+  cPathDelimeter = '\';
+  cPrefiksNazwyPliku = '';
+  cSufiksOryginal = '_Oryginał';
+
+
+
+const
+  cLineBreak = #13#10;
+
+function PobNazwePlikuLog: string;
+var
+  vData: string;
+begin
+  DateTimeToString(vData, 'yyyy-MM-dd_hhmmss', Now);
+  Result := 'Log_' + vData + '.txt';
+end;
+
+procedure PrzygotujLog;
+begin
+  if (LogStringList <> nil) then Exit;
+
+  LogStringList := TStringList.Create;
+
+  PlikLog := PobNazwePlikuLog;
+
+  LogStringList.SaveToFile(cKatalogLog + PlikLog);
+end;
+
+procedure DodajDoLogu(const ATekst: string);
+begin
+  if (LogStringList = nil) then Exit;
+
+  LogStringList.Append(DateTimeToStr(Now) + ': ' + ATekst);
+  LogStringList.SaveToFile(cKatalogLog + PlikLog);
+end;
+
+function PobNrDok(const AIdNagl: string): string;
+var
+  vSql: string;
+begin
+  vSql :='select N.NRDOKWEW'
+      +' from NAGL N'
+      +' and n.id_nagl ='+ AIdNagl;
+
+
+
+  Result := Trim(GetFromQuerySQL(vSql, 0));
+end;
+
+
+
+function PobWartCechy(AIdNagl, idCechaDok: string  ): string;
+var
+  vSql: string;
+begin
+  vSql := 'select wc.wartosc'
+       +  ' from WYSTCECHNAGL WC'
+       +' where wc.id_nagl=' + AIdNagl
+       + ' and wc.id_cechadokk=' + idCechaDok
+
+  Result := Trim(GetFromQuerySQL(vSql, 0));
+end;
+
+function PobSkrotDefDok(const AIdNagl: string): string;
+var
+  vSql: string;
+begin
+  vSql := 'select dd.skrotdefdok'
+       + ' from nagl n'
+       + ' join defdok dd on n.id_defdok = dd.id_defdok'
+       + ' where n.id_nagl = ' + AIdNagl;
+
+  Result := Trim(GetFromQuerySQL(vSql, 0));
+end;
+
+function PobUtworzFolder(const AIdNagl: string): string;
+var
+  vFolder: string;
+  vSkrDok: string;
+  vData: string;
+begin
+  vFolder := cFolderDrukuj;
+  if not DirectoryExists(vFolder) then
+    CreateDir(vFolder);
+
+  vSkrDok := PobSkrotDefDok(AIdNagl);
+
+  vFolder := vFolder + vSkrDok;
+  if not DirectoryExists(vFolder) then
+    CreateDir(vFolder);
+
+  DateTimeToString(vData, 'yyyy-MM-dd', Now);
+  Zastap('-', cPathDelimeter, vData);
+
+  vFolder := vFolder + cPathDelimeter + Copy(vData, 1, 4);
+  if not DirectoryExists(vFolder) then
+    CreateDir(vFolder);
+
+  vFolder := vFolder + cPathDelimeter + Copy(vData, 6, 2);
+  if not DirectoryExists(vFolder) then
+    CreateDir(vFolder);
+
+  vFolder := vFolder + cPathDelimeter + Copy(vData, 9, 2);
+  if not DirectoryExists(vFolder) then
+    CreateDir(vFolder);
+
+  Result := cFolderDrukuj + vSkrDok + cPathDelimeter + vData + cPathDelimeter;
+end;
+
+function PobNazwePliku(const AIdNagl: string): string;
+var
+  vNrDok: string;
+  vData: string;
+begin
+  vNrDok := PobNrDok(AIdNagl);
+  Zastap('/', '_', vNrDok);
+
+  DateTimeToString(vData, 'yyyy-MM-dd_hhmmss', Now);
+
+  Result := Trim(cPrefiksNazwyPliku + ' ' + vNrDok + ' ' + vData);
+end;
+
+function PobWartoscDokumentu(const AIdNagl: string): string;
+var
+  vSql: string;
+begin
+  vSql := 'select zv.netto'
+       + ' from nagl n'
+       + ' left outer join zestawienievat zv on (n.id_nagl = zv.id_nagl) and (zv.klu_id_stawkavat = 0) and (zv.typpodsumow = 0) and (zv.ewivat7 = 0)'
+       + ' where n.id_nagl = ' + AIdNagl;
+
+  Result := Trim(GetFromQuerySQL(vSql, 0));
+end;
+
+function PobTerminPlatnosciDokumentu(const AIdNagl: string): string;
+var
+  vSql: string;
+begin
+  vSql := 'select cast(n.termplatn as date)'
+       + ' from nagl n'
+       + ' where n.id_nagl = ' + AIdNagl;
+
+  Result := Trim(GetFromQuerySQL(vSql, 0));
+end;
+
+
+function PobierzEmailList(const AIdNagl: string): string;
+var
+  vSql: string;
+begin
+     vSql :='select K.EMAIL'
+      +' from NAGL N'
+      +' join KONTRAH K on N.ID_KONTRAH = K.ID_KONTRAH'
+      +' and n.id_nagl ='+ AIdNagl;
+
+  Result := Trim(GetFromQuerySQL(vSql, 0));
+end;
+
+function PobStopke: string;
+var
+  vSL: TstStringList;
+begin
+  Result := '';
+  if not FileExists(cStopkaHtml) then Exit;
+
+  vSL := TstStringList.Create;
+  try
+    vSL.LoadFromFile(cStopkaHtml);
+    Result := vSL.Text;
+  finally
+    vSL.Free;
+  end;
+end;
+
+procedure WyslijMail(const AKatalogTemp, AEmailList, AReplayTo, ASubject, ABody: string);
+var
+  vSL: TstStringList;
+begin
+  vSL := TstStringList.Create;
+  try
+    vSL.Clear;
+    vSL.Add(ASubject);
+    vSL.SaveToFile(AKatalogTemp + '\'+ '$email_subject$');
+
+    vSL.Clear;
+    vSL.Add(ABody);
+    vSL.SaveToFile(AKatalogTemp + '\'+ '$email_body$');
+  finally
+    vSL.Free;
+  end;
+
+  WyslijMailDll(PChar(AKatalogTemp), PChar(AEmailList), PChar(AReplayTo));
+end;
+
+
+
+
+procedure SetParams(AParams: TObjectList);
+var
+  p: TReportParam;
+  i: Integer;
+begin
+  for i := 0 to AParams.Count - 1 do
+  begin
+    p := TReportParam(AParams.Items[i]);
+    if (p.Nazwa = 'ID_NAGL') then
+    begin
+      p.Wartosc := idNagl;
+    end;
+  end;
+end;
+
+
+
+procedure WydrukujDoPdfWyslijEmail(const AIdNagl: string);
+var
+  vFolder: string;
+  vNazwaPliku: string;
+  vGuid: string;
+  vHResult: HResult;
+  vUid: TGuid;
+  vEmailList: string;
+  vReplayTo: string;
+  vKatalogTemp: string;
+  vNrDok: string;
+  vData: string;
+  vSubject: string;
+  vBody: string;
+  vBodyBezStopki: string;
+  vSL: TstStringList;
+  identKlient:string;
+  nazwaWyrobu: string;
+  nazwaSpedytora: string;
+  liczba:string;
+  numerPrzewozowy:string;
+begin
+  DodajDoLogu('Dokument (id_nagl): ' + AIdNagl);
+
+  vNrDok := PobNrDok(AIdNagl);
+
+  DodajDoLogu('Dokument: ' + vNrDok);
+
+
+
+  vEmailList := PobierzEmailList(AIdNagl);
+  if (vEmailList = '') then
+  begin
+    DodajDoLogu('Nieokreślony adres email.');
+    Exit;
+  end;
+
+      inf300(vEmailList);
+
+  vNazwaPliku := PobNazwePliku(AIdNagl);
+  DodajDoLogu('Nazwa pliku: ' + vNazwaPliku + '.pdf');
+
+  DodajDoLogu('Adres email: ' + vEmailList);
+
+
+  vSubject := Trim('Potwierdzenie wysyłki towaru BISS nr   ' + vNrDok);
+
+  DodajDoLogu('Temat maila: ' + cLineBreak + vSubject);
+
+  identKlient:= PobWartCechy(AIdNagl, '20064');
+  nazwaWyrobu:= PobWartCechy(AIdNagl, '20065');
+  liczba:= PobWartCechy(AIdNagl, '20061');
+  nazwaSpedytora:= PobWartCechy(AIdNagl, '20062');
+  numerPrzewozowy:= PobWartCechy(AIdNagl, '20063');
+
+  vSL := TstStringList.Create;
+  try
+    vSL.Clear;
+    vSL.Add('<p>Witam</p>');
+    vSL.Add('<p>Informujemy iż w dniu dzisiejszym wysyłamy do '+identKlient+ 'towar '+nazwaWyrobu+ '</p>');
+    vSL.Add('<p>Przewidywana data dostawy to 24-48 h z wyłączeniem świąt sobót oraz niedziel.</p>');
+    vSL.Add('<p>W załączniku przesyłamy dokument WZ oraz certyfikat jakości dotyczące zamówionego wyrobu.</p>');
+    vSL.Add('<p>Towar w ilość '+liczba+ ' palet zostanie dostarczony spedycja '+nazwaSpedytora+ '  numer LP '+numerPrzewozowy+ ' </p>');
+    vSL.Add('<p>Z poważaniem </p>');
+    vSL.Add('<p>Zespół BISS </p>');
+    vSL.Add('<p>tel. 17 2271 043 wew. 12</p>');
+    vSL.Add('<p>email: zamówienia@biss.com.pl</p>');
+    vSL.Add('<p>Odwiedź nas na www.biss.com.pl</p>');
+    vSL.Add('<p>Wiadomość wygenerowana automatycznie</p>');
+    vBodyBezStopki := vSL.Text;
+    vSL.Add(PobStopke);
+    vBody := vSL.Text;
+  finally
+    vSL.Free;
+  end;
+
+  DodajDoLogu('Treść maila (bez stopki): ' + cLineBreak + vBodyBezStopki);
+
+  vFolder := PobUtworzFolder(AIdNagl);
+
+  vGuid := '';
+
+  vHResult := CreateGuid(vUid);
+  if (vHResult = S_OK) then
+    vGuid := GuidToString(vUid);
+
+  if (vGuid = '') then
+  begin
+    DodajDoLogu('Błąd przy generowaniu nazwy katalogu.');
+    Exit;
+  end;
+
+  vKatalogTemp := GetTempDir + vGuid;
+  if not DirectoryExists(vKatalogTemp) then
+    CreateDir(vKatalogTemp);
+
+  DodajDoLogu('Wydruk i zapis dokumentu do pliku:');
+  DodajDoLogu(vFolder + vNazwaPliku + cSufiksOryginal + '.pdf');
+
+  ZestawienieDefOnParamsExtended(cIdRaportRbListaPozycji, @SetParams, False, False, 'PDF:' + cFolderDrukuj + '\' + vNazwaPliku + '.pdf');
+
+  DodajDoLogu('Wykonanie funkcji PrintStandardDokGM: True');
+
+  if not FileExists(cFolderDrukuj + vNazwaPliku  + '.pdf') then
+  begin
+    DodajDoLogu('Nie udało się poprawnie wydrukować i zapisać dokumentu do pliku - brak pliku.');
+    Exit;
+  end;
+
+
+  DodajDoLogu('Zapis informacji o wygenerowaniu pliku.');
+
+  DodajDoLogu('Kopiowanie pliku: ' + vNazwaPliku + cSufiksOryginal + '.pdf');
+  if not CopyFileCheckAll(cFolderDrukuj + vNazwaPliku  + '.pdf',
+    vKatalogTemp + cPathDelimeter + vNazwaPliku + cSufiksOryginal + '.pdf', False) then
+  begin
+    DodajDoLogu('Błąd przy kopiowaniu pliku.');
+    Exit;
+  end;
+
+  DodajDoLogu('Skopiowano plik.');
+
+  DodajDoLogu('Wysyłanie maila.');
+
+  vReplayTo := '';
+
+  WyslijMail(vKatalogTemp + '\', vEmailList, vReplayTo, vSubject, vBody);
+
+  DodajDoLogu('Wysłano maila.');
+
+  DodajDoLogu('Zapisanie informacji o wysłaniu maila (cechy).');
+
+  DateTimeToString(vData, 'yyyy-MM-dd hh:mm:ss', Now);
+
+
+end;
+
+procedure Wykonaj(Sender: TObject);
+var
+  vLog: string;
+  vSql: string;
+  IdNaglSpr: Integer;
+  Resultt: string;
+begin
+  PrzygotujLog;
+  vLog := 'Uruchomiono proces generowania plików pdf i wysyłki maili:' + cLineBreak
+           + 'Data wykonania: ' + DateTimeToStr(Now) + cLineBreak
+           + 'Użytkownik: ' + GetUser + cLineBreak
+           + 'Stanowisko: ' + GetWorkStation;
+  DodajDoLogu(vLog);
+
+  try
+
+    IdNaglSpr:=frm.QueryMain.FieldByName('ID_NAGL').AsInteger;
+
+    Vsql:='select count(*) from nagldane where id_nagl=' + intToStr(IdNaglSpr)
+        +' and ID_NAGL_PRIORYTET =5';
+
+     Resultt := Trim(GetFromQuerySQL(vSql, 0));
+
+     if(Resultt='0')then
+     begin
+            DodajDoLogu('Status dokumentu nieprawidłowy. Ustaw Priorytet na wysłane');
+            inf300('Status dokumentu nieprawidłowy. Ustaw Priorytet na wysłane');
+            exit;
+     end;
+
+    idNagl:= IdNaglSpr;
+    WydrukujDoPdfWyslijEmail(IntToStr(IdNaglSpr));
+    DodajDoLogu('Wygenerowano i wysłano maila dla  (id_nagl): ' + IntToStr(IdNaglSpr));
+  finally
+    DodajDoLogu('Zakończono proces generowania plików pdf i wysyłki maili.');
+  end;
+end;
+
+
+
+
+begin
+  if (Self is TfDokZamowieniaOdOdb) then
+  begin
+    if (frm = nil) then
+    begin
+      frm := Self as TfDokZamowieniaOdOdb;
+    end;
+    if (frm <> nil) then
+    begin
+      //if (frm.WindowId = [w_ID]) then
+      begin
+
+        PluginsAddAction(Self, 'Wyslij Maila', 'Upload', @Wykonaj); //Dodanie przycisku
+
+      end;
+    end;
+  end;
+end.

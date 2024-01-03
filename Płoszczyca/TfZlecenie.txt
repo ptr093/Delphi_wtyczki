@@ -1,0 +1,792 @@
+//TfZlecenie
+{$ADDTYPE TfZlecenie}
+
+var
+  fZlecenie: TfZlecenie;
+
+var
+ dbgDostawy: TKrDBGrid;
+ dbgTechnologie: TKrDBGrid;
+
+ Edit : TDBEdit;
+ Edit2 : TDBEdit;
+
+ RodzajWydruku : TLabel;
+ pPanel_t : TPanel;
+const
+     path = '\\192.168.1.42\shared_st\plugins\';
+    //   path = 'C:\STREAM\shared\plugins\';
+
+
+//dodane
+                                     var
+  P_Przyciski : TstMenuPanel;
+  btnGetDir : TstMenuFlatButton;
+  btnGetTech : TstMenuFlatButton;
+  btnShowDir : TstMenuFlatButton;
+
+  frMain: TForm;
+  edtFilePath: TEdit;
+  btnFilePath: TButton;
+  btnSave: TButton;
+  btnCancel: TButton;
+  idKartoteka : integer;
+  idTechnologia: integer;
+  doc_path: String;
+  doc_plik: String;
+procedure OnChangeNagl_tech(Sender : TObject);
+var
+ sql : String;
+begin
+ sql := 'select id_technologia,nazwa,case status when 1 then ''w przygotowaniu'' when 0 then ''aktywna''else ''archiwalna'' end,ilosc,glowna,nrtech from technologia where id_kartoteka='+IntToStr(Edit2.DataSource.DataSet.FieldByName('ID_KARTOTEKA').AsInteger) +' and status not in (2,3)';
+
+ CloseQuerySQL(dbgTechnologie.DataSource);
+ dbgTechnologie.DataSource := OpenQuerySQL(sql,0);
+ //inf(sql,100)           ;
+end;
+
+procedure OnChangeNagl(Sender : TObject);
+var
+ sql : String;
+begin
+ sql := 'select  Z.ID_MATERIAL, sum(Z.ILOSC) as "ildostawy", m.ilosc ,k.ID_KARTOTEKA, K.INDEKS, K.NAZWASKR, K.NAZWADL, j.jm ' +
+        'from ZLECENIEDOSTAWA Z ' +
+        'join DOSTAWA D on (D.ID_DOSTAWA = Z.ID_DOSTAWA) ' +
+        'join KARTOTEKA K on (K.ID_KARTOTEKA = D.ID_KARTOTEKA) ' +
+        'join material m on m.id_material = z.id_material ' +
+        'join jm j on j.id_jm = k.id_jm ' +
+        'where (Z.ID_ZLECENIE = ' + IntToStr(edit.DataSource.DataSet.FieldByName('ID_ZLECENIE').AsInteger) +
+        ' and (Z.ID_MATERIAL is not null)) and z.rodzaj = 22 ' +
+        'group by Z.ID_MATERIAL,  K.ID_KARTOTEKA, K.INDEKS, K.NAZWASKR, K.NAZWADL,m.ilosc, j.jm ';
+  CloseQuerySQL(dbgDostawy.DataSource);
+  dbgDostawy.DataSource := OpenQuerySQL(sql,0);
+
+
+end;
+
+procedure AddTabSheetTechnologie;
+var
+ tControl : TPageControl;
+ tTechnologie : TTabSheet;
+
+
+ dsMain : TDataSource;
+ dbgMain : TKrDBGrid;
+
+begin
+ tControl := TPageControl(self.FindComponent('PC_dodinfo'));
+ if tControl <> nil then
+ begin
+  tTechnologie := TTabSheet(self.FindComponent('tTechnologie'));
+  if tTechnologie = nil then
+  begin
+  tTechnologie := TTabSheet.Create(tControl);
+  tTechnologie.Name := 'tTechnologie';
+  tTechnologie.Caption := 'Wszystkie technologie';
+  tTechnologie.PageControl := tControl;
+  //Panell
+  pPanel_t := TPanel.Create(tTechnologie);
+  pPanel_t.Name := 'pPanel_t';
+  //pPanel_t.ClassName := 'pPanel_t';
+  pPanel_t.Parent := tTechnologie;
+  pPanel_t.Align := alClient;
+  pPanel_t.Caption := '';
+
+  dbgMain := TKrDBGrid(self.FindComponent('DBGmain'));
+  //DBGrid
+  dbgTechnologie := TKrDBGrid.Create(pPanel_t);
+  dbgTechnologie.Name := 'dbgTechnologie';
+  dbgTechnologie.Parent := pPanel_t;
+  dbgTechnologie.Left := 0;
+  dbgTechnologie.Top := 0;
+  dbgTechnologie.Width := 910;
+  dbgTechnologie.Height := 371;
+  dbgTechnologie.Align := alClient;
+  dbgTechnologie.ReadOnly := True;
+  dbgTechnologie.TabOrder := 1;
+
+
+
+  if dbgMain <> nil then
+  begin
+   dbgTechnologie.TitleFont := dbgMain.TitleFont;
+   dbgTechnologie.Options := dbgMain.Options;
+   dbgTechnologie.OnDrawColumnCell := dbgMain.OnDrawColumnCell;
+   dbgTechnologie.OnDrawDataCell := dbgMain.OnDrawDataCell;
+  end  ;
+
+
+ edit2 := TDBEdit.Create(self);
+ edit2.Parent := pPanel_t;
+ edit2.Visible := false;
+
+ dsMain := TDataSource(self.FindComponent('DS_Main'));
+ if dsMain <> nil then
+ begin
+   edit2.DataSource := dsMain;
+   edit2.DataField := 'ID_KARTOTEKA';
+   edit2.OnChange := @OnChangeNagl_tech;
+end
+
+  end
+ end
+
+end;
+
+
+procedure AddTabSheetDostawy;
+var
+ tControl : TPageControl;
+ tDostawy : TTabSheet;
+ pPanel : TPanel;
+ dsMain : TDataSource;
+ dbgMain : TKrDBGrid;
+
+begin
+ tControl := TPageControl(self.FindComponent('PC_dodinfo'));
+ if tControl <> nil then
+ begin
+  tDostawy := TTabSheet(self.FindComponent('tDostawy'));
+  if tDostawy = nil then
+  begin
+  tDostawy := TTabSheet.Create(tControl);
+  tDostawy.Name := 'tDostawy';
+  tDostawy.Caption := 'Dostawy surowców';
+  tDostawy.PageControl := tControl;
+  //Panell
+  pPanel := TPanel.Create(tDostawy);
+  pPanel.Name := 'pPanel';
+  pPanel.Parent := tDostawy;
+  pPanel.Align := alClient;
+  pPanel.Caption := '';
+
+  dbgMain := TKrDBGrid(self.FindComponent('DBGmain'));
+  //DBGrid
+  dbgDostawy := TKrDBGrid.Create(pPanel);
+  dbgDostawy.Name := 'dbgDostawy';
+  dbgDostawy.Parent := pPanel;
+  dbgDostawy.Left := 0;
+  dbgDostawy.Top := 0;
+  dbgDostawy.Width := 910;
+  dbgDostawy.Height := 371;
+  dbgDostawy.Align := alClient;
+  dbgDostawy.ReadOnly := True;
+  dbgDostawy.TabOrder := 1;
+  if dbgMain <> nil then
+  begin
+   dbgDostawy.TitleFont := dbgMain.TitleFont;
+   dbgDostawy.Options := dbgMain.Options;
+   dbgDostawy.OnDrawColumnCell := dbgMain.OnDrawColumnCell;
+   dbgDostawy.OnDrawDataCell := dbgMain.OnDrawDataCell;
+  end  ;
+
+  with dbgDostawy.Columns.Add do begin
+    Expanded := False;
+    FieldName := 'ID_MATERIAL';
+    Visible := False;
+  end;
+  with dbgDostawy.Columns.Add do begin
+    Expanded := False;
+    FieldName := 'ID_KARTOTEKA';
+    Visible := False;
+  end;
+  with dbgDostawy.Columns.Add do begin
+    Expanded := False;
+    FieldName := 'INDEKS';
+    Title.Caption := 'Indeks';
+    Width := 103;
+    Visible := True;
+  end;
+  with dbgDostawy.Columns.Add do begin
+    Expanded := False;
+    FieldName := 'NAZWASKR';
+    Title.Caption := 'Symbol';
+    Width := 200;
+    Visible := True;
+  end;
+  with dbgDostawy.Columns.Add do begin
+    Expanded := False;
+    FieldName := 'NAZWADL';
+    Title.Caption := 'Nazwa';
+    Width := 250;
+    Visible := True;
+  end;
+  with dbgDostawy.Columns.Add do begin
+    Expanded := False;
+    FieldName := 'Ilosc';
+    Title.Caption := 'Ilość wg technologii';
+    Width := 120;
+    Visible := True;
+  end;
+  with dbgDostawy.Columns.Add do begin
+    Expanded := False;
+    FieldName := 'ildostawy';
+    Title.Caption := 'Ilość z dostawy';
+    Visible := True;
+    Width := 120;
+  end;
+  with dbgDostawy.Columns.Add do begin
+    Expanded := False;
+    FieldName := 'Jm';
+    Title.Caption := 'Jm';
+    Width := 45;
+    Visible := True;
+  end;
+
+
+
+  edit := TDBEdit.Create(self);
+  edit.Parent := pPanel;
+  edit.Visible := false;
+
+  dsMain := TDataSource(self.FindComponent('DS_Main'));
+  if dsMain <> nil then
+  begin
+    edit.DataSource := dsMain;
+    edit.DataField := 'ID_ZLECENIE';
+    edit.OnChange := @OnChangeNagl;
+  end
+
+  end
+ end
+
+end;
+
+
+procedure CrateLabelRodzajWydruku;
+begin
+
+RodzajWydruku := TLabel(self.FindComponent('RodzajWydruku'));
+
+   if RodzajWydruku = nil then
+   begin
+     RodzajWydruku := TLabel.Create(self);
+     RodzajWydruku.Name := 'RodzajWydruku';
+     //RodzajWydruku.Parent := stMenu;
+     RodzajWydruku.Caption := '';
+     RodzajWydruku.Visible := false;
+   end;
+
+end;
+
+{Dodanie przycisku do drukowania karty technologicznej }
+
+procedure OnDrukuj(Sender : TObject);
+var
+vAction : TAction;
+begin
+  RodzajWydruku.Caption := 'Karta_Technol';
+  ZestawienieDef(10055, true);
+
+  vAction := TAction(self.FindComponent('AS_Refresh'));
+  if vAction <> nil then
+     vAction.OnExecute(vAction);
+end;
+
+procedure OnDrukujKarteZabiegowa(Sender : TObject);
+var
+vAction : TAction;
+begin
+  RodzajWydruku.Caption := 'Karta_Zabiegowa';
+  ZestawienieDef(10090, true);
+  vAction := TAction(self.FindComponent('AS_Refresh'));
+  if vAction <> nil then
+     vAction.OnExecute(vAction);
+end;
+
+
+
+procedure AddButtonPrintZlec;
+var
+ stMenu : TstMenuPanel;
+ stDrukujKarte : TstMenuFlatButton;
+begin
+  stMenu := TstMenuPanel(self.FindComponent('stMenuPanelZest'));
+
+  if stMenu <> nil then
+  begin
+       stDrukujKarte := TstMenuFlatButton(self.FindComponent('stDrukujKarte'));
+       if (stDrukujKarte = nil) then
+       begin
+            //Dodaje przycisk do panelu
+            stDrukujKarte := TstMenuFlatButton.Create(stMenu);
+            stDrukujKarte.Name := 'stDrukujKarte';
+            stMenu.InsertControl(stDrukujKarte);
+            stDrukujKarte.Left := stMenu.Width + 4;
+            stDrukujKarte.Width := 32;
+            stDrukujKarte.Height := 30;
+            stDrukujKarte.Margin := -1;
+            stDrukujKarte.NumGlyphs := 1;
+            stDrukujKarte.Glyph.Width := 24;
+            stDrukujKarte.Glyph.Height := 24;
+            stDrukujKarte.Glyph.LoadFromFile(path + 'F9.bmp');
+            stDrukujKarte.Hint := 'Drukuj kartę technologiczną';
+            stDrukujKarte.OnClick := @OnDrukuj;
+            stMenu.AutoSize := True;
+
+      end else
+            stDrukujKarte.OnClick := @OnDrukuj;
+  end else
+    ShowMessage('Brak komponentu');
+
+end;
+
+procedure AddButtonPrintKartaZabiegowa;
+var
+ stMenu : TstMenuPanel;
+ stDrukujKarteZabiegowa : TstMenuFlatButton;
+begin
+  stMenu := TstMenuPanel(self.FindComponent('stMenuPanelZest'));
+
+  if stMenu <> nil then
+  begin
+       stDrukujKarteZabiegowa := TstMenuFlatButton(self.FindComponent('stDrukujKarteZabiegowa'));
+       if (stDrukujKarteZabiegowa = nil) then
+       begin
+            //Dodaje przycisk do panelu
+            stDrukujKarteZabiegowa := TstMenuFlatButton.Create(stMenu);
+            stDrukujKarteZabiegowa.Name := 'stDrukujKarteZabiegowa';
+            stMenu.InsertControl(stDrukujKarteZabiegowa);
+            stDrukujKarteZabiegowa.Left := stMenu.Width + 4;
+            stDrukujKarteZabiegowa.Width := 32;
+            stDrukujKarteZabiegowa.Height := 30;
+            stDrukujKarteZabiegowa.Margin := -1;
+            stDrukujKarteZabiegowa.NumGlyphs := 1;
+            stDrukujKarteZabiegowa.Glyph.Width := 24;
+            stDrukujKarteZabiegowa.Glyph.Height := 24;
+            stDrukujKarteZabiegowa.Glyph.LoadFromFile(path + 'print-icon.bmp');
+            stDrukujKarteZabiegowa.Hint := 'Drukuj kartę zabiegową';
+            stDrukujKarteZabiegowa.OnClick := @OnDrukujKarteZabiegowa;
+            stMenu.AutoSize := True;
+
+      end else
+            stDrukujKarteZabiegowa.OnClick := @OnDrukujKarteZabiegowa;
+  end else
+    ShowMessage('Brak komponentu');
+
+end;
+
+
+
+procedure OnPrintKartaWyrobuNiezgodnego(Sender : TObject);
+begin
+  RodzajWydruku.Caption := 'Karta_Wyr_Got';
+  ZestawienieDef(10057, true);
+end;
+
+//Przycisk do drukowania karty wyrobu niezgodnego
+
+procedure AddButtonPrintWyrobNiezgodny;
+var
+  stMenu : TstMenuPanel;
+ stDrukujWyrobNiezgodny :  TstMenuFlatButton;
+begin
+  stMenu := TstMenuPanel(self.FindComponent('stMenuPanelZest'));
+
+  if stMenu <> nil then
+  begin
+       stDrukujWyrobNiezgodny := TstMenuFlatButton(self.FindComponent('stDrukujWyrobNiezgodny'));
+       if (stDrukujWyrobNiezgodny = nil) then
+       begin
+            //Dodaje przycisk do panelu
+            stDrukujWyrobNiezgodny := TstMenuFlatButton.Create(stMenu);
+            stDrukujWyrobNiezgodny.Name := 'stDrukujWyrobNiezgodny';
+            stMenu.InsertControl(stDrukujWyrobNiezgodny);
+            stDrukujWyrobNiezgodny.Left := stMenu.Width + 4;
+            stDrukujWyrobNiezgodny.Width := 32;
+            stDrukujWyrobNiezgodny.Height := 30;
+            stDrukujWyrobNiezgodny.Margin := -1;
+            stDrukujWyrobNiezgodny.NumGlyphs := 1;
+            stDrukujWyrobNiezgodny.Glyph.Width := 24;
+            stDrukujWyrobNiezgodny.Glyph.Height := 24;
+            stDrukujWyrobNiezgodny.Glyph.LoadFromFile(path + 'F9_K.bmp');
+            stDrukujWyrobNiezgodny.Hint := 'Drukuj kartę wyrobu niezgodnego';
+            stDrukujWyrobNiezgodny.OnClick := @OnPrintKartaWyrobuNiezgodnego;
+            stMenu.AutoSize := True;
+
+      end else
+            stDrukujWyrobNiezgodny.OnClick := @OnDrukuj;
+  end else
+    ShowMessage('Brak komponentu');
+
+end;
+
+ //tu dodane
+
+
+procedure GetIdKart;
+begin
+     if TDataSource(self.FindComponent('DS_main')) <> nil then begin
+        idKartoteka := TDataSource(self.FindComponent('DS_main')).DataSet.FieldByName('ID_KARTOTEKA').AsInteger;
+        idTechnologia := TDataSource(self.FindComponent('DS_main')).DataSet.FieldByName('ID_TECHNOLOGIA').AsInteger;
+
+     end;
+end;
+
+function  sprawdz_czy_jest_dok:string;
+var
+sql: String;
+msg: String;
+begin
+     sql:='select list(distinct nazwa ) from kartot_dokzew where id_kartoteka='+ IntToStr(idKartoteka);
+     msg :=GetFromQuerySQL(sql,0);
+     Result:=msg;
+end;
+
+
+procedure GetDir(Sender : TObject);
+
+var
+  openDialog : TOpenDialog;    // Open dialog variable
+begin
+  openDialog := TOpenDialog.Create(self);
+  openDialog.Options := [ofFileMustExist];
+  openDialog.FilterIndex := 2;
+  if openDialog.Execute      then
+	   edtFilePath.Text :=  extractfiledir(openDialog.FileName);
+  openDialog.Free;
+end;
+
+procedure Okno(Sender : TObject);
+var
+  P_Top: TPanel;
+  P_Client: TPanel;
+  sql, idDok, NazwaPliku,klu_idDok: String;
+  dsTechnologia : TDataSource;
+  buttonSelected : LONGINT;
+  dokumentacja: String;
+  czy_dok:String;
+  vAction : TAction;
+begin
+  frMain := TForm.Create(Self);
+  P_Top := TPanel.Create(frMain);
+  edtFilePath := TEdit.Create(frMain);
+  btnFilePath := TButton.Create(frMain);
+  P_Client := TPanel.Create(frMain);
+  btnSave := TButton.Create(frMain);
+  btnCancel := TButton.Create(frMain);
+
+  frMain.Name := 'frMain';
+  frMain.Left := 223;
+  frMain.Top := 125;
+  frMain.Width := 544;
+  frMain.Height := 133;
+  frMain.Caption := 'Katalog z rysunkami';
+  frMain.Color := clBtnFace;
+  frMain.OldCreateOrder := False;
+  frMain.PixelsPerInch := 96;
+  frMain.Position := poScreenCenter;
+
+  P_Top.Name := 'P_Top';
+  P_Top.Parent := frMain;
+  P_Top.Left := 0;
+  P_Top.Top := 0;
+  P_Top.Width := 536;
+  P_Top.Height := 57;
+  P_Top.Align := alTop;
+  P_Top.TabOrder := 0;
+  P_Top.Caption := '';
+
+  edtFilePath.Name := 'edtFilePath';
+  edtFilePath.Parent := P_Top;
+  edtFilePath.Left := 16;
+  edtFilePath.Top := 16;
+  edtFilePath.Width := 473;
+  edtFilePath.Height := 21;
+  edtFilePath.TabOrder := 0;
+  edtFilePath.Text := '';
+
+  btnFilePath.Name := 'btnFilePath';
+  btnFilePath.Parent := P_Top;
+  btnFilePath.Left := 490;
+  btnFilePath.Top := 16;
+  btnFilePath.Width := 33;
+  btnFilePath.Height := 20;
+  btnFilePath.Caption := '...';
+  btnFilePath.TabOrder := 1;
+  btnFilePath.OnClick := @GetDir;
+
+  P_Client.Name := 'P_Client';
+  P_Client.Parent := frMain;
+  P_Client.Left := 0;
+  P_Client.Top := 57;
+  P_Client.Width := 536;
+  P_Client.Height := 42;
+  P_Client.Align := alClient;
+  P_Client.TabOrder := 1;
+  P_Client.Caption := '';
+
+  btnSave.Name := 'btnSave';
+  btnSave.Parent := P_Client;
+  btnSave.Left := 16;
+  btnSave.Top := 8;
+  btnSave.Width := 75;
+  btnSave.Height := 25;
+  btnSave.Caption := 'Zapisz';
+  btnSave.ModalResult := 1;
+  btnSave.TabOrder := 0;
+
+  btnCancel.Name := 'btnCancel';
+  btnCancel.Parent := P_Client;
+  btnCancel.Left := 414;
+  btnCancel.Top := 8;
+  btnCancel.Width := 75;
+  btnCancel.Height := 25;
+  btnCancel.Caption := 'Anuluj';
+  btnCancel.ModalResult := 2;
+  btnCancel.TabOrder := 1;
+
+  if  frMain.ShowModal = mrCancel then
+      frMain.Free
+  else
+  begin
+
+
+       if edtFilePath.Text <> '' then
+       begin
+            GetIdKart;
+            czy_dok:=sprawdz_czy_jest_dok;
+
+            if(Length(czy_dok)  > 0) then
+            begin
+                 buttonSelected :=   MessageDlg('W kartotece istnieje już dokumentacja: '+czy_dok +' Czy na pewno chcesz dodać kolejną? Wciskając NIE dodasz dokumentację tylko do technologii!!!',mtCustom,[mbYes,mbNo], 0);
+
+                                if buttonSelected = mrYes         then begin
+
+                                   sql :='select gen_id(gen_doddokumzew, 1) from RDB$DATABASE';
+                                   idDok := GetFromQuerySQL(sql,0);
+
+                                   //sql :='select gen_id(GEN_KLU_DODDOKUMZEW, 1) from RDB$DATABASE';
+                                   //klu_idDok := GetFromQuerySQL(sql,0);
+
+                                   NazwaPliku := copy(edtFilePath.Text,1,50);
+
+
+                                   //sql := 'insert into doddokumzew (id_doddokumzew, nazwapliku, link, typ,NRWERSJI,KLU_ID_DODDOKUMZEW,ID_UZYTKOWNIK) ' +
+                                     //     'values (' + idDok + ',' + QuotedStr(NazwaPliku) + ',' +  QuotedStr(edtFilePath.Text) + ',1,0,'+klu_idDok+',4)';
+                                       sql := 'insert into DODDOKUMZEW (ID_DODDOKUMZEW, NAZWAPLIKU, LINK, TYP, DATADODANIA, ID_UZYTKOWNIK, WERSJA, ID_DODDOKUMZEW_PARENT) ' +
+                                       'values (' + idDok + ',' + QuotedStr(NazwaPliku) + ',' +  QuotedStr(edtFilePath.Text) + ',1,current_timestamp,4,1,null)';
+
+                                   ExecuteSQL(sql,0);
+
+                                   sql := 'insert into kartot_dokzew (id_kartoteka, id_doddokumzew, id_typzdarzcrm, nazwa) ' +
+                                   'values (' + IntToStr(idKartoteka) + ',' + idDok + ', null,' + QuotedStr(NazwaPliku) + ')';
+
+                                   ExecuteSQL(sql,0);
+                                 end;
+            end else
+            begin
+              sql :='select gen_id(gen_doddokumzew, 1) from RDB$DATABASE';
+              idDok := GetFromQuerySQL(sql,0);
+
+
+              sql :='select gen_id(GEN_KLU_DODDOKUMZEW, 1) from RDB$DATABASE';
+              klu_idDok := GetFromQuerySQL(sql,0);
+
+
+              NazwaPliku := copy(edtFilePath.Text,1,50);
+
+                //sql := 'insert into doddokumzew (id_doddokumzew, nazwapliku, link, typ,NRWERSJI,KLU_ID_DODDOKUMZEW,ID_UZYTKOWNIK) ' +
+                      // 'values (' + idDok + ',' + QuotedStr(NazwaPliku) + ',' +  QuotedStr(edtFilePath.Text) + ',1,0,'+klu_idDok+',4)';
+
+                  sql := 'insert into DODDOKUMZEW (ID_DODDOKUMZEW, NAZWAPLIKU, LINK, TYP, DATADODANIA, ID_UZYTKOWNIK, WERSJA, ID_DODDOKUMZEW_PARENT) ' +
+                   'values (' + idDok + ',' + QuotedStr(NazwaPliku) + ',' +  QuotedStr(edtFilePath.Text) + ',1,current_timestamp,4,1,null)';
+
+
+                ExecuteSQL(sql,0);
+
+             sql := 'insert into kartot_dokzew (id_kartoteka, id_doddokumzew, id_typzdarzcrm, nazwa) ' +
+             'values (' + IntToStr(idKartoteka) + ',' + idDok + ', null,' + QuotedStr(NazwaPliku) + ')';
+
+             ExecuteSQL(sql,0);
+
+            end;
+
+
+            // uzupelnienie istniejacych echn.
+
+            //sql := 'select t.id_technologia from technologia t where t.id_kartoteka = ' + IntToStr(idKartoteka);
+            sql := 'select t.id_technologia from technologia t where t.id_technologia = ' + IntToStr(idTechnologia);
+
+            dsTechnologia := OpenQuerySQL(sql,0);
+
+            dsTechnologia.DataSet.First;
+            while not dsTechnologia.DataSet.EOF do
+            begin
+                 idTechnologia := dsTechnologia.DataSet.FieldByName('id_technologia').AsInteger;
+                 if  idTechnologia > 0 then
+                 begin
+                   sql :='select gen_id(gen_doddokumzew, 1) from RDB$DATABASE';
+                   idDok := GetFromQuerySQL(sql,0);
+
+                   sql :='select gen_id(GEN_KLU_DODDOKUMZEW, 1) from RDB$DATABASE';
+                   klu_idDok := GetFromQuerySQL(sql,0);
+
+                   NazwaPliku := copy(edtFilePath.Text,1,50);
+
+                  //  sql := 'insert into doddokumzew (id_doddokumzew, nazwapliku, link, typ,NRWERSJI,KLU_ID_DODDOKUMZEW,ID_UZYTKOWNIK) ' +
+                  // 'values (' + idDok + ',' + QuotedStr(NazwaPliku) + ',' +  QuotedStr(edtFilePath.Text) + ',1,0,'+klu_idDok+',4)';
+
+                 sql := 'insert into DODDOKUMZEW (ID_DODDOKUMZEW, NAZWAPLIKU, LINK, TYP, DATADODANIA, ID_UZYTKOWNIK, WERSJA, ID_DODDOKUMZEW_PARENT) ' +
+                   'values (' + idDok + ',' + QuotedStr(NazwaPliku) + ',' +  QuotedStr(edtFilePath.Text) + ',1,current_timestamp,4,1,null)';
+
+
+                   ExecuteSQL(sql,0);
+
+                   sql := 'insert into WYSTTECHZPDOKUMZEW (ID_TECHNOLOGIA, ID_DODDOKUMZEW, NAZWA) ' +
+                   'values (' + IntToStr(idTechnologia) + ',' + idDok + ',' + QuotedStr(NazwaPliku) + ')';
+
+                   ExecuteSQL(sql,0);
+
+                 end;
+
+                 dsTechnologia.DataSet.Next;
+            end;
+
+            CloseQuerySQL(dsTechnologia);
+            frMain.Free;
+
+              vAction := TAction(self.FindComponent('AS_Refresh'));
+  if vAction <> nil then
+     vAction.OnExecute(vAction);
+       end;
+  end;
+end;
+
+
+
+
+//*****************************
+// Dodanie podgladu do dokumentacji
+//START
+//******************************
+
+function LastCharPos(const S: string;const chara: CHAR): Integer;
+var
+  i: Integer;
+begin
+  result := 0;
+  for i := length(S) downto 1 do
+    if S[i] = chara then
+   begin
+     result := i;
+     break; // or Exit; if you prefer that
+   end;
+end;
+
+function get_doc_path : String;
+var
+dsSciezka : TDataSource;
+sql: String;
+doc_path:String;
+id_dokzew: String;
+
+
+
+
+begin
+id_dokzew:='';
+id_dokzew:=TDataSource(self.FindComponent('DS_DokumentProdukcyjny')).DataSet.FieldByName('ID_DODDOKUMZEW').AsString;
+if(id_dokzew='') then
+begin
+id_dokzew:='-1000';
+end;
+            sql := 'select link,nazwapliku from doddokumzew dd  where  ID_DODDOKUMZEW=' +id_dokzew;
+          //  inf(sql,0);
+            dsSciezka := OpenQuerySQL(sql,0);
+
+            dsSciezka.DataSet.First;
+
+            while not dsSciezka.DataSet.EOF do
+            begin
+                 doc_path := dsSciezka.DataSet.FieldByName('link').AsString;
+                 doc_plik := dsSciezka.DataSet.FieldByName('nazwapliku').AsString;
+
+                 dsSciezka.DataSet.Next;
+            end;
+
+            CloseQuerySQL(dsSciezka);
+            result:= doc_path;
+
+end;
+
+procedure get_doc_path2;
+var
+  i: Integer;
+  substring: String;
+  K: Integer;
+  j: integer;
+
+begin
+doc_path :='';
+k:=0;
+        doc_path := get_doc_path;
+        j :=Pos(':\',doc_plik);
+
+        if (j=0) then
+         begin
+          i :=LastCharPos(doc_path,'\');
+          substring:=Copy(doc_path,i,Length(doc_path));
+          k :=LastCharPos(substring,'.');
+
+          if(k>0)  then
+          begin
+           doc_path :=Copy(doc_path,0,i);
+          end;
+         end;
+end;
+
+procedure GetDir2(Sender : TObject);   //otwarcie katalogu
+var
+  openDialog : TOpenDialog;    // Open dialog variable
+begin
+  get_doc_path2;
+  //ShowMessage(doc_path);
+  if (Length(doc_path)>0) then begin
+
+     openDialog := TOpenDialog.Create(self);
+     openDialog.InitialDir:=doc_path;
+     openDialog.Options := [ofFileMustExist];
+     openDialog.FilterIndex := 2;
+
+     if openDialog.Execute      then  begin
+        ShellExecute(0,'open',PChar(openDialog.FileName), '','',0);
+        openDialog.Free;
+     end;
+  end else begin
+       ShowMessage('Brak przypisanej dokumentacji');
+  end ;
+
+end;
+
+
+begin
+  //wersja 9.0.352.32
+  //jeżeli użyjemy "Nazwy Okna" i wpiszemy "TfZlecenie" to wtyczka nie uruchamia się na oknie
+  //Trzeba użyć "Identyfikatora" 61360
+
+  if (Self is TfZlecenie) then
+  begin
+    if (fZlecenie = nil) then
+    begin
+      fZlecenie := TfZlecenie(Self);
+
+      PluginsAddAction(Self, 'Drukuj kartę technologiczną', 'File w10', @OnDrukuj);
+      PluginsAddAction(Self, 'Drukuj kartę wyrobu niezgodnego', path + 'F9_K.bmp', @OnPrintKartaWyrobuNiezgodnego);
+      PluginsAddAction(Self, 'Drukuj kartę zabiegową', path + 'print-icon.bmp', @OnDrukujKarteZabiegowa);
+      PluginsAddAction(Self, 'Wskaż katalog z rysunkami', path + 'folder-open-icon.bmp', @Okno);
+      PluginsAddAction(Self, 'Otwórz katalog z rysunkami', path + 'doc.bmp', @GetDir2);
+
+
+
+    end;
+  end;
+
+  CrateLabelRodzajWydruku;
+  AddTabSheetDostawy;
+  AddTabSheetTechnologie;
+
+ {AddButtonPrintZlec;
+  AddButtonPrintWyrobNiezgodny;
+  AddButtonPrintKartaZabiegowa;}
+end.
